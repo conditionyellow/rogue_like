@@ -16,7 +16,10 @@ class Game {
         this.entities = [];
         this.items = [];
         this.turn = 0;
-        this.gameState = 'playing'; // playing, inventory, dead
+        this.floor = 1; // 現在の階層
+        this.gameState = 'playing'; // playing, inventory, item_selection, dead
+        this.itemSelectionMode = false;
+        this.nextItemId = 0; // グローバルアイテムIDカウンター
         
         this.messages = [];
         this.maxMessages = 50;
@@ -42,7 +45,8 @@ class Game {
         this.createPlayer();
         this.spawnEnemies();
         this.spawnItems();
-        this.addMessage("Welcome to the dungeon! Find the stairs to descend deeper.", 'system');
+        this.addMessage(`Welcome to the dungeon! (Floor ${this.floor})`, 'system');
+        this.addMessage("Find the stairs to descend deeper.", 'system');
         this.render();
         this.updateUI();
     }
@@ -53,6 +57,12 @@ class Game {
     
     handleInput(e) {
         if (this.gameState === 'dead') return;
+        
+        // アイテム選択モードの処理
+        if (this.itemSelectionMode) {
+            this.handleItemSelection(e);
+            return;
+        }
         
         let moved = false;
         let dx = 0, dy = 0;
@@ -87,11 +97,22 @@ class Game {
                 this.pickupItem();
                 break;
             case 'u':
-                // Use item (simplified)
-                this.useItem();
+                // Use item (now with selection)
+                this.startItemSelection();
                 break;
             case 'i':
                 this.toggleInventory();
+                break;
+            case 'e':
+                this.showEquipment();
+                break;
+            case 'r':
+                this.removeEquipment();
+                break;
+            // 数字キーでのダイレクトアイテム使用
+            case '1': case '2': case '3': case '4': case '5':
+            case '6': case '7': case '8': case '9':
+                this.useItemByIndex(parseInt(e.key) - 1);
                 break;
         }
         
@@ -295,13 +316,19 @@ class Game {
             maxHp: 100,
             mp: 50,
             maxMp: 50,
-            attack: 10,
-            defense: 5,
+            baseAttack: 10,  // 基本攻撃力
+            baseDefense: 5,  // 基本防御力
+            attack: 10,      // 計算後攻撃力
+            defense: 5,      // 計算後防御力
             level: 1,
             experience: 0,
             experienceToNext: 100,
             gold: 0,
             inventory: [],
+            equipment: {     // 装備スロット
+                weapon: null,
+                armor: null
+            },
             symbol: '@',
             color: this.colors.player,
             rest: function() {
@@ -361,7 +388,7 @@ class Game {
                     this.items.push({
                         ...itemType,
                         x, y,
-                        id: this.items.length
+                        id: this.nextItemId++ // グローバルカウンターでユニークID生成
                     });
                 }
             }
@@ -378,7 +405,12 @@ class Game {
                 this.player.gold += item.value;
                 this.addMessage(`You picked up ${item.value} gold!`, 'item');
             } else {
-                this.player.inventory.push(item);
+                // インベントリに追加する際に新しいIDを割り当て（重複防止）
+                const inventoryItem = {
+                    ...item,
+                    id: this.nextItemId++
+                };
+                this.player.inventory.push(inventoryItem);
                 this.addMessage(`You picked up ${item.name}!`, 'item');
             }
             
@@ -390,7 +422,7 @@ class Game {
     }
     
     useItem() {
-        // Simple use first potion system
+        // ポーションを最優先で使用
         const potion = this.player.inventory.find(item => item.type === 'potion');
         if (potion) {
             if (potion.effect === 'heal') {
@@ -401,11 +433,136 @@ class Game {
                 this.addMessage(`You drink the ${potion.name} and recover ${potion.value} MP!`, 'item');
             }
             
-            this.player.inventory = this.player.inventory.filter(item => item.id !== potion.id);
+            this.removeItemFromInventory(potion.id);
             this.processTurn();
-        } else {
-            this.addMessage("You don't have any potions to use.", 'system');
+            return;
         }
+        
+        // ポーションがない場合は装備アイテムを装備
+        const equipableItem = this.player.inventory.find(item => 
+            item.type === 'weapon' || item.type === 'armor'
+        );
+        
+        if (equipableItem) {
+            this.equipItem(equipableItem);
+        } else {
+            this.addMessage("You don't have any usable items.", 'system');
+        }
+    }
+    
+    // 新しいアイテム選択システム
+    startItemSelection() {
+        if (this.player.inventory.length === 0) {
+            this.addMessage("Your inventory is empty.", 'system');
+            return;
+        }
+        
+        this.itemSelectionMode = true;
+        this.addMessage("=== SELECT ITEM TO USE ===", 'system');
+        
+        this.player.inventory.forEach((item, index) => {
+            const keyNumber = index + 1;
+            let description = `${keyNumber}: ${item.symbol} ${item.name}`;
+            
+            if (item.type === 'potion') {
+                description += ` (${item.effect === 'heal' ? 'HP' : 'MP'} +${item.value})`;
+            } else if (item.type === 'weapon') {
+                description += ` (Attack +${item.attack})`;
+            } else if (item.type === 'armor') {
+                description += ` (Defense +${item.defense})`;
+            }
+            
+            this.addMessage(description, 'item');
+        });
+        
+        this.addMessage("Press 1-9 to use item, or ESC to cancel.", 'system');
+    }
+    
+    handleItemSelection(e) {
+        const key = e.key.toLowerCase();
+        
+        if (key === 'escape') {
+            this.itemSelectionMode = false;
+            this.addMessage("Item selection cancelled.", 'system');
+            e.preventDefault();
+            return;
+        }
+        
+        // 数字キーの処理
+        if (key >= '1' && key <= '9') {
+            const index = parseInt(key) - 1;
+            this.useItemByIndex(index);
+            this.itemSelectionMode = false;
+        }
+        
+        e.preventDefault();
+    }
+    
+    useItemByIndex(index) {
+        if (index < 0 || index >= this.player.inventory.length) {
+            if (this.itemSelectionMode) {
+                this.addMessage("Invalid item number.", 'system');
+            }
+            return;
+        }
+        
+        const item = this.player.inventory[index];
+        
+        if (item.type === 'potion') {
+            if (item.effect === 'heal') {
+                if (this.player.hp >= this.player.maxHp) {
+                    this.addMessage("Your HP is already full.", 'system');
+                    return;
+                }
+                this.player.hp = Math.min(this.player.maxHp, this.player.hp + item.value);
+                this.addMessage(`You drink the ${item.name} and recover ${item.value} HP!`, 'item');
+            } else if (item.effect === 'mana') {
+                if (this.player.mp >= this.player.maxMp) {
+                    this.addMessage("Your MP is already full.", 'system');
+                    return;
+                }
+                this.player.mp = Math.min(this.player.maxMp, this.player.mp + item.value);
+                this.addMessage(`You drink the ${item.name} and recover ${item.value} MP!`, 'item');
+            }
+            
+            // ポーションのみ、使用後にインベントリから削除
+            this.removeItemFromInventory(item.id);
+            this.processTurn();
+            
+        } else if (item.type === 'weapon' || item.type === 'armor') {
+            // 装備アイテムの場合は equipItem メソッドに処理を委任
+            // equipItem 内でインベントリからの削除も処理される
+            this.equipItem(item);
+            
+        } else {
+            this.addMessage("You can't use that item.", 'system');
+        }
+    }
+    
+    // 安全なアイテム削除メソッド
+    removeItemFromInventory(itemId) {
+        const originalLength = this.player.inventory.length;
+        const itemToRemove = this.player.inventory.find(item => item.id === itemId);
+        
+        if (!itemToRemove) {
+            console.warn(`Warning: Item with ID ${itemId} not found in inventory`);
+            console.log('Current inventory:', this.player.inventory.map(item => `${item.name}(ID:${item.id})`));
+            return false;
+        }
+        
+        console.log(`Attempting to remove ${itemToRemove.name} (ID: ${itemId}) from inventory`);
+        this.player.inventory = this.player.inventory.filter(item => item.id !== itemId);
+        
+        // デバッグ: 削除が正常に行われたかチェック
+        if (this.player.inventory.length === originalLength) {
+            console.warn(`Warning: Failed to remove item ${itemToRemove.name} (ID: ${itemId}) from inventory`);
+            console.log('Inventory after failed removal:', this.player.inventory.map(item => `${item.name}(ID:${item.id})`));
+            return false;
+        }
+        
+        console.log(`Successfully removed ${itemToRemove.name} (ID: ${itemId}) from inventory`);
+        console.log('Inventory after removal:', this.player.inventory.map(item => `${item.name}(ID:${item.id})`));
+        return true;
     }
     
     checkLevelUp() {
@@ -417,21 +574,27 @@ class Game {
             // Level up bonuses
             const hpIncrease = this.random(8, 15);
             const mpIncrease = this.random(3, 8);
+            const attackIncrease = this.random(1, 3);
+            const defenseIncrease = this.random(1, 2);
             
             this.player.maxHp += hpIncrease;
             this.player.hp += hpIncrease;
             this.player.maxMp += mpIncrease;
             this.player.mp += mpIncrease;
-            this.player.attack += this.random(1, 3);
-            this.player.defense += this.random(1, 2);
+            this.player.baseAttack += attackIncrease;  // 基本ステータスを更新
+            this.player.baseDefense += defenseIncrease; // 基本ステータスを更新
+            
+            // 装備込みステータスを再計算
+            this.updatePlayerStats();
             
             this.addMessage(`Level up! You are now level ${this.player.level}!`, 'system');
-            this.addMessage(`HP +${hpIncrease}, MP +${mpIncrease}, Attack and Defense increased!`, 'system');
+            this.addMessage(`HP +${hpIncrease}, MP +${mpIncrease}, Attack +${attackIncrease}, Defense +${defenseIncrease}`, 'system');
         }
     }
     
     descendStairs() {
-        this.addMessage("You descend deeper into the dungeon...", 'system');
+        this.floor++; // 階層を増やす
+        this.addMessage(`You descend deeper into the dungeon... (Floor ${this.floor})`, 'system');
         this.generateDungeon();
         
         // Place player at start of new level
@@ -458,9 +621,140 @@ class Game {
         if (this.player.inventory.length === 0) {
             this.addMessage("Your inventory is empty.", 'system');
         } else {
-            this.player.inventory.forEach(item => {
-                this.addMessage(`${item.symbol} ${item.name}`, 'item');
+            this.player.inventory.forEach((item, index) => {
+                const keyNumber = index + 1;
+                let description = `${keyNumber}: ${item.symbol} ${item.name}`;
+                
+                if (item.type === 'potion') {
+                    description += ` (${item.effect === 'heal' ? 'HP' : 'MP'} +${item.value})`;
+                } else if (item.type === 'weapon') {
+                    description += ` (Attack +${item.attack})`;
+                } else if (item.type === 'armor') {
+                    description += ` (Defense +${item.defense})`;
+                }
+                
+                this.addMessage(description, 'item');
             });
+            this.addMessage("Press 1-9 to use item directly, or U to enter selection mode.", 'system');
+        }
+    }
+    
+    // Equipment System
+    equipItem(item) {
+        if (item.type === 'weapon') {
+            // 同じ武器を再装備しようとしている場合はスキップ
+            if (this.player.equipment.weapon && this.player.equipment.weapon.id === item.id) {
+                this.addMessage(`${item.name} is already equipped.`, 'system');
+                return;
+            }
+            
+            // まず、インベントリから装備するアイテムを削除
+            if (!this.removeItemFromInventory(item.id)) {
+                this.addMessage("Failed to equip item - item not found in inventory.", 'system');
+                return;
+            }
+            
+            // 既存の武器を外してインベントリに戻す
+            if (this.player.equipment.weapon) {
+                const unequippedItem = {
+                    ...this.player.equipment.weapon,
+                    id: this.nextItemId++  // 新しいIDを割り当て
+                };
+                this.player.inventory.push(unequippedItem);
+                this.addMessage(`You unequip ${this.player.equipment.weapon.name}.`, 'item');
+            }
+            
+            // 新しい武器を装備
+            this.player.equipment.weapon = item;
+            this.addMessage(`You equip ${item.name}! Attack +${item.attack}`, 'item');
+            
+        } else if (item.type === 'armor') {
+            // 同じ防具を再装備しようとしている場合はスキップ
+            if (this.player.equipment.armor && this.player.equipment.armor.id === item.id) {
+                this.addMessage(`${item.name} is already equipped.`, 'system');
+                return;
+            }
+            
+            // まず、インベントリから装備するアイテムを削除
+            if (!this.removeItemFromInventory(item.id)) {
+                this.addMessage("Failed to equip item - item not found in inventory.", 'system');
+                return;
+            }
+            
+            // 既存の防具を外してインベントリに戻す
+            if (this.player.equipment.armor) {
+                const unequippedItem = {
+                    ...this.player.equipment.armor,
+                    id: this.nextItemId++  // 新しいIDを割り当て
+                };
+                this.player.inventory.push(unequippedItem);
+                this.addMessage(`You unequip ${this.player.equipment.armor.name}.`, 'item');
+            }
+            
+            // 新しい防具を装備
+            this.player.equipment.armor = item;
+            this.addMessage(`You equip ${item.name}! Defense +${item.defense}`, 'item');
+        }
+        
+        // ステータスを再計算
+        this.updatePlayerStats();
+        this.processTurn();
+    }
+    
+    unequipItem(slot) {
+        const item = this.player.equipment[slot];
+        if (item) {
+            // インベントリに戻す際に新しいIDを割り当て（重複防止）
+            const inventoryItem = {
+                ...item,
+                id: this.nextItemId++
+            };
+            this.player.inventory.push(inventoryItem);
+            this.player.equipment[slot] = null;
+            this.addMessage(`You unequip ${item.name}.`, 'item');
+            this.updatePlayerStats();
+        }
+    }
+    
+    showEquipment() {
+        this.addMessage("=== EQUIPMENT ===", 'system');
+        if (this.player.equipment.weapon) {
+            this.addMessage(`Weapon: ${this.player.equipment.weapon.symbol} ${this.player.equipment.weapon.name} (+${this.player.equipment.weapon.attack} Attack)`, 'item');
+        } else {
+            this.addMessage("Weapon: None", 'system');
+        }
+        
+        if (this.player.equipment.armor) {
+            this.addMessage(`Armor: ${this.player.equipment.armor.symbol} ${this.player.equipment.armor.name} (+${this.player.equipment.armor.defense} Defense)`, 'item');
+        } else {
+            this.addMessage("Armor: None", 'system');
+        }
+    }
+    
+    removeEquipment() {
+        // 武器から優先的に外す
+        if (this.player.equipment.weapon) {
+            this.unequipItem('weapon');
+            this.processTurn();
+        } else if (this.player.equipment.armor) {
+            this.unequipItem('armor');
+            this.processTurn();
+        } else {
+            this.addMessage("You have no equipment to remove.", 'system');
+        }
+    }
+    
+    updatePlayerStats() {
+        // 基本ステータスから開始
+        this.player.attack = this.player.baseAttack;
+        this.player.defense = this.player.baseDefense;
+        
+        // 装備ボーナスを加算
+        if (this.player.equipment.weapon) {
+            this.player.attack += this.player.equipment.weapon.attack || 0;
+        }
+        if (this.player.equipment.armor) {
+            this.player.defense += this.player.equipment.armor.defense || 0;
         }
     }
     
@@ -497,6 +791,9 @@ class Game {
         document.getElementById('playerDefense').textContent = this.player.defense;
         document.getElementById('playerGold').textContent = this.player.gold;
         
+        // Update floor display
+        document.getElementById('currentFloor').textContent = this.floor;
+        
         // Update health bar
         const healthPercent = (this.player.hp / this.player.maxHp) * 100;
         document.getElementById('healthBar').style.width = healthPercent + '%';
@@ -508,9 +805,10 @@ class Game {
         // Update inventory display
         const inventoryDiv = document.getElementById('inventory');
         inventoryDiv.innerHTML = '';
-        this.player.inventory.forEach(item => {
+        this.player.inventory.forEach((item, index) => {
             const div = document.createElement('div');
-            div.textContent = `${item.symbol} ${item.name}`;
+            const keyNumber = index + 1;
+            div.textContent = `${keyNumber}: ${item.symbol} ${item.name}`;
             inventoryDiv.appendChild(div);
         });
     }
