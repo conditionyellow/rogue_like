@@ -19,6 +19,7 @@ class Game {
         this.floor = 1; // 現在の階層
         this.gameState = 'playing'; // playing, inventory, item_selection, dead
         this.itemSelectionMode = false;
+        this.inventoryUIActive = false; // 専用インベントリUI表示フラグ
         this.nextItemId = 0; // グローバルアイテムIDカウンター
         
         this.messages = [];
@@ -57,6 +58,12 @@ class Game {
     
     handleInput(e) {
         if (this.gameState === 'dead') return;
+        
+        // インベントリUI表示中の処理
+        if (this.inventoryUIActive) {
+            this.handleInventoryInput(e);
+            return;
+        }
         
         // アイテム選択モードの処理
         if (this.itemSelectionMode) {
@@ -101,7 +108,7 @@ class Game {
                 this.startItemSelection();
                 break;
             case 'i':
-                this.toggleInventory();
+                this.showInventoryUI();
                 break;
             case 'e':
                 this.showEquipment();
@@ -616,7 +623,7 @@ class Game {
     }
     
     toggleInventory() {
-        // Simple inventory display in messages
+        // Simple inventory display in messages (旧来のメソッド - 後方互換性のために残す)
         this.addMessage("=== INVENTORY ===", 'system');
         if (this.player.inventory.length === 0) {
             this.addMessage("Your inventory is empty.", 'system');
@@ -637,6 +644,335 @@ class Game {
             });
             this.addMessage("Press 1-9 to use item directly, or U to enter selection mode.", 'system');
         }
+    }
+    
+    // === 新しいインベントリUIシステム ===
+    
+    showInventoryUI() {
+        this.inventoryUIActive = true;
+        this.createInventoryUI();
+    }
+    
+    hideInventoryUI() {
+        this.inventoryUIActive = false;
+        this.removeInventoryUI();
+    }
+    
+    createInventoryUI() {
+        // 既存のインベントリUIがあれば削除
+        this.removeInventoryUI();
+        
+        // オーバーレイ背景を作成
+        const overlay = document.createElement('div');
+        overlay.id = 'inventoryOverlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        `;
+        
+        // インベントリウィンドウを作成
+        const inventoryWindow = document.createElement('div');
+        inventoryWindow.id = 'inventoryWindow';
+        inventoryWindow.style.cssText = `
+            background-color: #FFFFFF;
+            border: 3px solid #000000;
+            padding: 20px;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            color: #000000;
+        `;
+        
+        // ヘッダー
+        const header = document.createElement('div');
+        header.style.cssText = `
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #000000;
+            padding-bottom: 10px;
+        `;
+        header.textContent = '🎒 INVENTORY';
+        inventoryWindow.appendChild(header);
+        
+        // インベントリ内容
+        if (this.player.inventory.length === 0) {
+            const emptyMsg = document.createElement('div');
+            emptyMsg.style.cssText = `
+                text-align: center;
+                color: #666666;
+                padding: 20px;
+                font-style: italic;
+            `;
+            emptyMsg.textContent = 'Your inventory is empty.';
+            inventoryWindow.appendChild(emptyMsg);
+        } else {
+            this.player.inventory.forEach((item, index) => {
+                const itemElement = this.createInventoryItemElement(item, index);
+                inventoryWindow.appendChild(itemElement);
+            });
+        }
+        
+        // 操作案内
+        const controls = document.createElement('div');
+        controls.style.cssText = `
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 1px solid #333333;
+            font-size: 12px;
+            color: #666666;
+            text-align: center;
+        `;
+        controls.innerHTML = `
+            <strong>Controls:</strong><br>
+            Click on items to interact • ESC or I to close<br>
+            1-9: Use item directly
+        `;
+        inventoryWindow.appendChild(controls);
+        
+        overlay.appendChild(inventoryWindow);
+        document.body.appendChild(overlay);
+        
+        // ESCキーでクローズできるようにイベントリスナーを追加
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                this.hideInventoryUI();
+            }
+        });
+    }
+    
+    createInventoryItemElement(item, index) {
+        const itemDiv = document.createElement('div');
+        
+        // 装備中のアイテムかチェック
+        const isEquipped = (this.player.equipment.weapon && this.player.equipment.weapon.name === item.name) ||
+                          (this.player.equipment.armor && this.player.equipment.armor.name === item.name);
+        
+        itemDiv.style.cssText = `
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            margin: 5px 0;
+            border: ${isEquipped ? '2px solid #000000' : '1px solid #333333'};
+            background-color: ${isEquipped ? '#F5F5F5' : '#FFFFFF'};
+            cursor: pointer;
+            transition: background-color 0.2s;
+        `;
+        
+        // ホバー効果
+        itemDiv.addEventListener('mouseenter', () => {
+            itemDiv.style.backgroundColor = isEquipped ? '#EEEEEE' : '#F0F0F0';
+        });
+        itemDiv.addEventListener('mouseleave', () => {
+            itemDiv.style.backgroundColor = isEquipped ? '#F5F5F5' : '#FFFFFF';
+        });
+        
+        // アイテムアイコン
+        const icon = document.createElement('span');
+        icon.style.cssText = `
+            font-size: 16px;
+            font-weight: bold;
+            width: 30px;
+            text-align: center;
+            margin-right: 10px;
+            color: ${item.color};
+        `;
+        icon.textContent = item.symbol;
+        
+        // アイテム情報
+        const info = document.createElement('div');
+        info.style.cssText = `
+            flex: 1;
+        `;
+        
+        const name = document.createElement('div');
+        name.style.cssText = `
+            font-weight: bold;
+            font-size: 14px;
+        `;
+        name.textContent = `${index + 1}. ${item.name}${isEquipped ? ' [EQUIPPED]' : ''}`;
+        
+        const description = document.createElement('div');
+        description.style.cssText = `
+            font-size: 12px;
+            color: #666666;
+            margin-top: 2px;
+        `;
+        
+        let descText = '';
+        if (item.type === 'potion') {
+            descText = `${item.effect === 'heal' ? 'HP' : 'MP'} Recovery +${item.value}`;
+        } else if (item.type === 'weapon') {
+            descText = `Attack Power +${item.attack}`;
+        } else if (item.type === 'armor') {
+            descText = `Defense Power +${item.defense}`;
+        }
+        description.textContent = descText;
+        
+        info.appendChild(name);
+        info.appendChild(description);
+        
+        // アクションボタン
+        const actions = document.createElement('div');
+        actions.style.cssText = `
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        `;
+        
+        if (item.type === 'potion') {
+            // ポーションの場合は使用制限をチェック
+            let canUse = true;
+            let useText = 'Use';
+            
+            if (item.effect === 'heal' && this.player.hp >= this.player.maxHp) {
+                canUse = false;
+                useText = 'HP Full';
+            } else if (item.effect === 'mana' && this.player.mp >= this.player.maxMp) {
+                canUse = false;
+                useText = 'MP Full';
+            }
+            
+            const useBtn = this.createActionButton(useText, canUse ? '#000000' : '#999999', () => {
+                if (canUse) {
+                    this.useItemByIndex(index);
+                    this.updateInventoryUI();
+                }
+            });
+            if (!canUse) {
+                useBtn.style.cursor = 'not-allowed';
+            }
+            actions.appendChild(useBtn);
+            
+        } else if (item.type === 'weapon' || item.type === 'armor') {
+            if (isEquipped) {
+                const unequipBtn = this.createActionButton('Unequip', '#666666', () => {
+                    this.unequipItem(item.type === 'weapon' ? 'weapon' : 'armor');
+                    this.updateInventoryUI();
+                });
+                actions.appendChild(unequipBtn);
+            } else {
+                const equipBtn = this.createActionButton('Equip', '#000000', () => {
+                    this.equipItem(item);
+                    this.updateInventoryUI();
+                });
+                actions.appendChild(equipBtn);
+            }
+        }
+        
+        const dropBtn = this.createActionButton('Drop', '#999999', () => {
+            this.dropItem(index);
+            this.updateInventoryUI();
+        });
+        actions.appendChild(dropBtn);
+        
+        itemDiv.appendChild(icon);
+        itemDiv.appendChild(info);
+        itemDiv.appendChild(actions);
+        
+        // アイテムクリックで使用/装備（装備中でない場合のみ）
+        itemDiv.addEventListener('click', (e) => {
+            if (e.target.tagName !== 'BUTTON') {
+                if (item.type === 'potion') {
+                    this.useItemByIndex(index);
+                } else if ((item.type === 'weapon' || item.type === 'armor') && !isEquipped) {
+                    this.equipItem(item);
+                }
+                this.updateInventoryUI();
+            }
+        });
+        
+        return itemDiv;
+    }
+    
+    createActionButton(text, color, onClick) {
+        const button = document.createElement('button');
+        button.style.cssText = `
+            background-color: ${color};
+            color: #FFFFFF;
+            border: none;
+            padding: 4px 8px;
+            font-size: 10px;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+            min-width: 50px;
+        `;
+        button.textContent = text;
+        button.addEventListener('click', (e) => {
+            e.stopPropagation();
+            onClick();
+        });
+        button.addEventListener('mouseenter', () => {
+            button.style.opacity = '0.8';
+        });
+        button.addEventListener('mouseleave', () => {
+            button.style.opacity = '1';
+        });
+        return button;
+    }
+    
+    updateInventoryUI() {
+        if (this.inventoryUIActive) {
+            this.createInventoryUI(); // 再作成して更新
+        }
+    }
+    
+    removeInventoryUI() {
+        const overlay = document.getElementById('inventoryOverlay');
+        if (overlay) {
+            overlay.remove();
+        }
+    }
+    
+    handleInventoryInput(e) {
+        const key = e.key.toLowerCase();
+        
+        if (key === 'escape' || key === 'i') {
+            this.hideInventoryUI();
+        } else if (key >= '1' && key <= '9') {
+            const index = parseInt(key) - 1;
+            if (index < this.player.inventory.length) {
+                const item = this.player.inventory[index];
+                if (item.type === 'potion') {
+                    this.useItemByIndex(index);
+                } else if (item.type === 'weapon' || item.type === 'armor') {
+                    this.equipItem(item);
+                }
+                this.updateInventoryUI();
+            }
+        }
+        
+        e.preventDefault();
+    }
+    
+    dropItem(index) {
+        if (index < 0 || index >= this.player.inventory.length) {
+            return;
+        }
+        
+        const item = this.player.inventory[index];
+        
+        // アイテムをプレイヤーの足元に配置
+        const droppedItem = {
+            ...item,
+            x: this.player.x,
+            y: this.player.y,
+            id: this.nextItemId++
+        };
+        
+        this.items.push(droppedItem);
+        this.removeItemFromInventory(item.id);
+        this.addMessage(`You drop ${item.name}.`, 'item');
     }
     
     // Equipment System
