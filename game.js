@@ -22,15 +22,15 @@ class Game {
         this.maxMessages = 50;
         
         this.colors = {
-            wall: '#8B4513',
-            floor: '#2F2F2F',
-            door: '#8B4513',
-            player: '#FFD700',
-            enemy: '#FF4500',
-            item: '#00CED1',
-            potion: '#FF69B4',
-            weapon: '#C0C0C0',
-            stairs: '#FFFFFF'
+            wall: '#000000',
+            floor: '#FFFFFF',
+            door: '#000000',
+            player: '#000000',
+            enemy: '#666666',
+            item: '#333333',
+            potion: '#333333',
+            weapon: '#333333',
+            stairs: '#000000'
         };
         
         this.init();
@@ -344,10 +344,10 @@ class Game {
     spawnItems() {
         const itemTypes = [
             { name: 'Health Potion', symbol: '!', type: 'potion', effect: 'heal', value: 30, color: this.colors.potion },
-            { name: 'Mana Potion', symbol: '!', type: 'potion', effect: 'mana', value: 20, color: '#4169E1' },
+            { name: 'Mana Potion', symbol: '!', type: 'potion', effect: 'mana', value: 20, color: this.colors.potion },
             { name: 'Sword', symbol: '/', type: 'weapon', attack: 5, color: this.colors.weapon },
             { name: 'Shield', symbol: ']', type: 'armor', defense: 3, color: this.colors.weapon },
-            { name: 'Gold Coin', symbol: '$', type: 'gold', value: 25, color: '#FFD700' }
+            { name: 'Gold Coin', symbol: '$', type: 'gold', value: 25, color: this.colors.item }
         ];
         
         // Spawn items randomly in rooms
