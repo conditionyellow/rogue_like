@@ -143,9 +143,6 @@ class Game {
                 this.player.rest();
                 this.processTurn();
                 break;
-            case 'g':
-                this.pickupItem();
-                break;
             case 'u':
                 this.startItemSelection();
                 break;
@@ -228,6 +225,9 @@ class Game {
         if (this.dungeon[newY][newX] === '%') {
             this.descendStairs();
         }
+        
+        // Check for items and automatically pick them up
+        this.autoPickupItems();
         
         this.processTurn();
     }
@@ -734,6 +734,32 @@ class Game {
             this.processTurn();
         } else {
             this.addMessage("There's nothing here to pick up.", 'system');
+        }
+    }
+    
+    // 自動アイテム取得メソッド（移動時に呼び出される）
+    autoPickupItems() {
+        const item = this.items.find(item => 
+            item.x === this.player.x && item.y === this.player.y
+        );
+        
+        if (item) {
+            if (item.type === 'gold') {
+                this.player.gold += item.value;
+                this.audioManager.playSound('gold');
+                this.addMessage(`You picked up ${item.value} gold!`, 'item');
+            } else {
+                // インベントリに追加する際に新しいIDを割り当て（重複防止）
+                const inventoryItem = {
+                    ...item,
+                    id: this.nextItemId++
+                };
+                this.player.inventory.push(inventoryItem);
+                this.audioManager.playSound('itemPickup');
+                this.addMessage(`You picked up ${item.name}!`, 'item');
+            }
+            
+            this.items = this.items.filter(i => i.id !== item.id);
         }
     }
     
