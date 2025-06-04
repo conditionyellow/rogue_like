@@ -29,15 +29,21 @@ class Game {
         this.maxMessages = 50;
         
         this.colors = {
-            wall: '#000000',
-            floor: '#FFFFFF',
-            door: '#000000',
-            player: '#000000',
-            enemy: '#666666',
-            item: '#333333',
-            potion: '#333333',
-            weapon: '#333333',
-            stairs: '#000000'
+            background: '#1a1a1a',        // ダークグレー背景
+            wall: '#4a4a4a',              // ミディアムグレーの壁
+            floor: '#2d2d2d',             // ダークグレーの床
+            door: '#6a9bd1',              // ソフトブルーのドア/通路
+            player: '#7dd87d',            // 明るい緑のプレイヤー
+            enemy: '#e74c3c',             // 温かい赤の敵
+            item: '#f39c12',              // 温かいオレンジのアイテム
+            potion: '#9b59b6',            // 紫のポーション
+            weapon: '#e67e22',            // オレンジの武器
+            armor: '#3498db',             // 青の防具
+            gold: '#f1c40f',              // 金色のゴールド
+            stairs: '#ecf0f1',            // ライトグレーの階段
+            text: '#ecf0f1',              // メインテキスト色
+            textSecondary: '#bdc3c7',     // セカンダリテキスト色
+            ui: '#34495e'                 // UI要素色
         };
         
         this.init();
@@ -680,7 +686,7 @@ class Game {
         const itemTypes = [
             { name: 'Health Potion', symbol: '!', type: 'potion', effect: 'heal', value: 30, color: this.colors.potion },
             { name: 'Mana Potion', symbol: '!', type: 'potion', effect: 'mana', value: 20, color: this.colors.potion },
-            { name: 'Sword', symbol: '/', type: 'weapon', attack: 5, color: this.colors.weapon },
+            { name: 'Sword', symbol: ')', type: 'weapon', attack: 5, color: this.colors.weapon },
             { name: 'Shield', symbol: ']', type: 'armor', defense: 3, color: this.colors.weapon },
             { name: 'Gold Coin', symbol: '$', type: 'gold', value: 25, color: this.colors.item }
         ];
@@ -1464,21 +1470,21 @@ class Game {
             inventoryDiv.appendChild(div);
         });
     }
-    
-    render() {
-        this.ctx.fillStyle = '#000000';
+     render() {
+        // ダークモード背景に変更
+        this.ctx.fillStyle = this.colors.background;
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-        
+
         // Calculate camera offset to center on player
         const cameraX = this.player.x - Math.floor(this.viewWidth / 2);
         const cameraY = this.player.y - Math.floor(this.viewHeight / 2);
-        
+
         // Render dungeon
         for (let y = 0; y < this.viewHeight; y++) {
             for (let x = 0; x < this.viewWidth; x++) {
                 const worldX = x + cameraX;
                 const worldY = y + cameraY;
-                
+
                 if (worldX >= 0 && worldX < this.mapWidth && worldY >= 0 && worldY < this.mapHeight) {
                     const tile = this.dungeon[worldY][worldX];
                     this.renderTile(x, y, tile);
@@ -1513,11 +1519,10 @@ class Game {
         const playerScreenY = this.player.y - cameraY;
         this.renderEntity(playerScreenX, playerScreenY, this.player.symbol, this.player.color);
     }
-    
-    renderTile(x, y, tile) {
+     renderTile(x, y, tile) {
         const pixelX = x * this.tileSize;
         const pixelY = y * this.tileSize;
-        
+
         switch(tile) {
             case '#':
                 this.ctx.fillStyle = this.colors.wall;
@@ -1529,11 +1534,11 @@ class Game {
                 this.ctx.fillStyle = this.colors.floor;
                 break;
             default:
-                this.ctx.fillStyle = '#000000';
+                this.ctx.fillStyle = this.colors.background;
         }
-        
+
         this.ctx.fillRect(pixelX, pixelY, this.tileSize, this.tileSize);
-        
+
         // Render stairs symbol
         if (tile === 'S') {
             this.renderEntity(x, y, '>', this.colors.stairs);
@@ -1750,8 +1755,9 @@ class Game {
         const maxHeight = isSmallScreen ? '95vh' : '90vh';
         
         gameOverWindow.style.cssText = `
-            background-color: #000000;
-            border: 3px solid #FFFFFF;
+            background-color: #2c3e50;
+            border: 3px solid: #7f8c8d;
+            color: #ecf0f1;
             padding: ${padding};
             max-width: 700px;
             max-height: ${maxHeight};
@@ -1804,23 +1810,23 @@ class Game {
         const controlsSize = isSmallScreen ? '10px' : '12px';
         
         gameOverWindow.innerHTML = `
-            <div style="color: #FF6666; font-size: ${titleSize}; font-weight: bold; margin-bottom: ${isSmallScreen ? '10px' : '15px'};">
+            <div style="color: #e74c3c; font-size: ${titleSize}; font-weight: bold; margin-bottom: ${isSmallScreen ? '10px' : '15px'};">
                 💀 GAME OVER 💀
             </div>
             
-            <div style="color: #CCCCCC; font-family: monospace; font-size: ${tombstoneSize}; margin-bottom: ${isSmallScreen ? '10px' : '15px'};">
+            <div style="color: #95a5a6; font-family: monospace; font-size: ${tombstoneSize}; margin-bottom: ${isSmallScreen ? '10px' : '15px'};">
 ${customTombstone}
             </div>
             
-            <div style="color: #FFAA00; font-size: ${causeSize}; margin-bottom: ${isSmallScreen ? '8px' : '10px'};">
+            <div style="color: #f39c12; font-size: ${causeSize}; margin-bottom: ${isSmallScreen ? '8px' : '10px'};">
                 <strong>Cause of Death:</strong> ${causeOfDeath}
             </div>
             
-            <div style="color: #66FF66; margin-bottom: ${isSmallScreen ? '10px' : '15px'};">
+            <div style="color: #2ecc71; margin-bottom: ${isSmallScreen ? '10px' : '15px'};">
                 <strong>Final Score:</strong> ${score} points
             </div>
             
-            <div style="color: #AAAAAA; margin-bottom: ${isSmallScreen ? '10px' : '15px'}; text-align: left; display: inline-block; font-size: ${statsSize};">
+            <div style="color: #bdc3c7; margin-bottom: ${isSmallScreen ? '10px' : '15px'}; text-align: left; display: inline-block; font-size: ${statsSize};">
                 <strong>📊 Statistics:</strong><br>
                 Level: ${this.player.level} • Floor: ${this.floor} • Turns: ${this.turn}<br>
                 Gold: ${this.player.gold} • EXP: ${this.player.experience}<br>
@@ -1831,7 +1837,7 @@ ${customTombstone}
                 Armor: ${this.player.equipment.armor ? this.player.equipment.armor.name : 'None'}
             </div>
             
-            <div style="color: #FFFF66; margin-top: ${isSmallScreen ? '10px' : '15px'}; font-size: ${controlsSize};">
+            <div style="color: #f1c40f; margin-top: ${isSmallScreen ? '10px' : '15px'}; font-size: ${controlsSize};">
                 <strong>🎮 Press [R] to restart • [ESC] to close</strong>
             </div>
         `;
