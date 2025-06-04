@@ -138,6 +138,42 @@
         }
         
         /* レスポンシブ対応 */
+        #controls {
+            font-size: 12px;
+            line-height: 1.4;
+            margin-top: 10px;
+        }
+        
+        #audioControls {
+            margin-top: 15px;
+            padding: 10px;
+            border: 1px solid #000000;
+            font-size: 12px;
+        }
+        
+        #audioControls h3 {
+            margin: 0 0 8px 0;
+            font-size: 14px;
+        }
+        
+        #volumeSlider {
+            width: 100%;
+            margin: 5px 0;
+        }
+        
+        #muteButton {
+            background-color: #FFFFFF;
+            border: 1px solid #000000;
+            padding: 5px 10px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 12px;
+        }
+        
+        #muteButton:hover {
+            background-color: #F0F0F0;
+        }
+        
         @media (max-width: 1200px) {
             #gameContainer {
                 flex-direction: column;
@@ -211,6 +247,13 @@
             <div>Defense: <span id="playerDefense">5</span></div>
             <div>Gold: <span id="playerGold">0</span></div>
             
+            <h3>Audio Controls</h3>
+            <div>
+                <label for="volumeSlider">Volume: <span id="volumeValue">70%</span></label><br>
+                <input type="range" id="volumeSlider" min="0" max="100" value="70" style="width: 100%; margin: 5px 0;">
+                <button id="muteButton" style="margin-top: 5px; padding: 3px 8px; font-size: 11px;">🔊 Mute</button>
+            </div>
+            
             <h3>Inventory</h3>
             <div id="inventory"></div>
             
@@ -228,9 +271,18 @@
                 E: Show equipment<br>
                 R: Remove equipment
             </div>
+            
+            <div id="audioControls">
+                <h3>Audio</h3>
+                <label for="volumeSlider">Volume: <span id="volumeDisplay">50%</span></label><br>
+                <input type="range" id="volumeSlider" min="0" max="100" value="50" step="1"><br>
+                <button id="muteButton">🔊 Mute</button>
+            </div>
         </div>
     </div>
     
+    <!-- Load audio.js before game.js to ensure AudioManager is defined -->
+    <script src="audio.js"></script>
     <script src="game.js"></script>
 </body>
 </html>

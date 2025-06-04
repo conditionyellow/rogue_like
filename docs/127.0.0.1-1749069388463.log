@@ -1,0 +1,14 @@
+(index):270 Live reload enabled.
+Unchecked runtime.lastError: The message port closed before a response was received.
+Unchecked runtime.lastError: The message port closed before a response was received.
+Unchecked runtime.lastError: The message port closed before a response was received.
+Unchecked runtime.lastError: The message port closed before a response was received.
+Unchecked runtime.lastError: The message port closed before a response was received.
+Unchecked runtime.lastError: The message port closed before a response was received.
+Unchecked runtime.lastError: The message port closed before a response was received.
+Unchecked runtime.lastError: The message port closed before a response was received.
+Unchecked runtime.lastError: The message port closed before a response was received.
+Unchecked runtime.lastError: The message port closed before a response was received.
+game.js:26 Uncaught ReferenceError: AudioManager is not defined
+    at new Game (game.js:26:33)
+    at window.onload (game.js:1717:18)

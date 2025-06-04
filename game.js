@@ -22,6 +22,9 @@ class Game {
         this.inventoryUIActive = false; // 専用インベントリUI表示フラグ
         this.nextItemId = 0; // グローバルアイテムIDカウンター
         
+        // Initialize audio system
+        this.audioManager = new AudioManager();
+        
         this.messages = [];
         this.maxMessages = 50;
         
@@ -48,16 +51,50 @@ class Game {
         this.spawnItems();
         this.addMessage(`Welcome to the dungeon! (Floor ${this.floor})`, 'system');
         this.addMessage("Find the stairs to descend deeper.", 'system');
+        this.addMessage("Press any key to enable audio...", 'system');
         this.render();
         this.updateUI();
+        
+        // Initialize audio on first user interaction
+        this.audioInitialized = false;
+    }
+    
+    async initializeAudio() {
+        if (!this.audioInitialized) {
+            await this.audioManager.init();
+            this.audioManager.startBackgroundMusic();
+            this.audioInitialized = true;
+            this.addMessage("Audio enabled! 🎵", 'system');
+        }
     }
     
     setupEventListeners() {
         document.addEventListener('keydown', (e) => this.handleInput(e));
+        
+        // Audio controls
+        const volumeSlider = document.getElementById('volumeSlider');
+        const muteButton = document.getElementById('muteButton');
+        const volumeValue = document.getElementById('volumeValue');
+        
+        volumeSlider.addEventListener('input', (e) => {
+            const volume = e.target.value / 100;
+            this.audioManager.setVolume(volume);
+            volumeValue.textContent = `${e.target.value}%`;
+        });
+        
+        muteButton.addEventListener('click', () => {
+            const isMuted = this.audioManager.toggleMute();
+            muteButton.textContent = isMuted ? '🔇 Unmute' : '🔊 Mute';
+        });
     }
     
     handleInput(e) {
         if (this.gameState === 'dead') return;
+        
+        // Initialize audio on first input
+        if (!this.audioInitialized) {
+            this.initializeAudio();
+        }
         
         // インベントリUI表示中の処理
         if (this.inventoryUIActive) {
@@ -104,17 +141,23 @@ class Game {
                 this.pickupItem();
                 break;
             case 'u':
-                // Use item (now with selection)
                 this.startItemSelection();
                 break;
             case 'i':
-                this.showInventoryUI();
+                this.toggleInventory();
                 break;
             case 'e':
                 this.showEquipment();
                 break;
             case 'r':
                 this.removeEquipment();
+                break;
+            // 🆕 セーブ/ロード機能
+            case 'ctrl+s':
+                this.saveGame();
+                break;
+            case 'ctrl+l':
+                this.loadGame();
                 break;
             // 数字キーでのダイレクトアイテム使用
             case '1': case '2': case '3': case '4': case '5':
@@ -131,6 +174,30 @@ class Game {
     }
     
     movePlayer(dx, dy) {
+        // Check if player is paralyzed
+        if (this.player.statusEffects && this.player.statusEffects.paralyzed && 
+            this.turn < this.player.statusEffects.paralyzed) {
+            this.addMessage("You are paralyzed and cannot move!");
+            this.processTurn(); // Still process the turn even if paralyzed
+            return;
+        }
+        
+        // Apply confusion effect to movement
+        if (this.player.statusEffects && this.player.statusEffects.confused && 
+            this.turn < this.player.statusEffects.confused) {
+            // 50% chance to move in a random direction when confused
+            if (Math.random() < 0.5) {
+                const directions = [
+                    {x: -1, y: 0}, {x: 1, y: 0}, {x: 0, y: -1}, {x: 0, y: 1},
+                    {x: -1, y: -1}, {x: 1, y: -1}, {x: -1, y: 1}, {x: 1, y: 1}
+                ];
+                const randomDir = directions[Math.floor(Math.random() * directions.length)];
+                dx = randomDir.x;
+                dy = randomDir.y;
+                this.addMessage("You stumble around in confusion!");
+            }
+        }
+        
         const newX = this.player.x + dx;
         const newY = this.player.y + dy;
         
@@ -147,6 +214,9 @@ class Game {
         // Move player
         this.player.x = newX;
         this.player.y = newY;
+        
+        // Play footstep sound
+        this.audioManager.playSound('footstep');
         
         // Check for stairs
         if (this.dungeon[newY][newX] === 'S') {
@@ -175,17 +245,27 @@ class Game {
         const damage = Math.max(1, attacker.attack - defender.defense + this.random(-2, 3));
         defender.hp -= damage;
         
+        // Play combat sounds
         if (attacker === this.player) {
+            this.audioManager.playSound('swordHit');
             this.addMessage(`You hit ${defender.name} for ${damage} damage!`, 'combat');
         } else {
+            this.audioManager.playSound('hurt');
             this.addMessage(`${attacker.name} hits you for ${damage} damage!`, 'combat');
+        }
+        
+        // Process special attacks when monsters attack the player
+        if (attacker.type === 'enemy' && defender === this.player) {
+            this.processSpecialAttacks(attacker, defender);
         }
         
         if (defender.hp <= 0) {
             defender.alive = false;
             if (defender === this.player) {
+                this.audioManager.playSound('death');
                 this.gameOver();
             } else {
+                this.audioManager.playSound('enemyDeath');
                 this.addMessage(`${defender.name} dies!`, 'combat');
                 this.player.experience += defender.experience;
                 this.player.gold += defender.gold;
@@ -194,7 +274,86 @@ class Game {
         }
     }
     
+    processSpecialAttacks(attacker, defender) {
+        // Poison attacks
+        if (attacker.specialAttacks && attacker.specialAttacks.includes('poison')) {
+            if (Math.random() < 0.25) { // 25% chance
+                if (!defender.statusEffects) defender.statusEffects = {};
+                defender.statusEffects.poisoned = this.turn + 5; // Lasts 5 turns
+                this.audioManager.playSound('poison');
+                this.addMessage(`${attacker.name}'s poison weakens you!`);
+            }
+        }
+        
+        // Paralysis attacks
+        if (attacker.specialAttacks && attacker.specialAttacks.includes('hold')) {
+            if (Math.random() < 0.15) { // 15% chance
+                if (!defender.statusEffects) defender.statusEffects = {};
+                defender.statusEffects.paralyzed = this.turn + 3; // Lasts 3 turns
+                this.audioManager.playSound('magic');
+                this.addMessage(`${attacker.name} paralyzes you!`);
+            }
+        }
+        
+        // Confusion attacks (like Medusa)
+        if (attacker.specialAttacks && attacker.specialAttacks.includes('confusion')) {
+            if (Math.random() < 0.20) { // 20% chance
+                if (!defender.statusEffects) defender.statusEffects = {};
+                defender.statusEffects.confused = this.turn + 4; // Lasts 4 turns
+                this.audioManager.playSound('magic');
+                this.addMessage(`${attacker.name} confuses you!`);
+            }
+        }
+        
+        // Draining attacks (Wraith, Vampire)
+        if (attacker.specialAttacks && attacker.specialAttacks.includes('drain')) {
+            if (Math.random() < 0.30) { // 30% chance
+                const drainAmount = Math.floor(Math.random() * 3) + 1;
+                defender.maxHp = Math.max(10, defender.maxHp - drainAmount);
+                if (defender.hp > defender.maxHp) defender.hp = defender.maxHp;
+                this.audioManager.playSound('drain');
+                this.addMessage(`${attacker.name} drains your life force!`);
+            }
+        }
+        
+        // Rust attacks (Aquator)
+        if (attacker.specialAttacks && attacker.specialAttacks.includes('rust')) {
+            if (Math.random() < 0.20 && defender.equippedArmor) { // 20% chance
+                defender.equippedArmor.defense = Math.max(0, defender.equippedArmor.defense - 1);
+                this.audioManager.playSound('metalBreak');
+                this.addMessage(`${attacker.name}'s acid damages your armor!`);
+                this.updatePlayerStats();
+            }
+        }
+        
+        // Steal attacks (Leprechaun, Nymph)
+        if (attacker.canSteal && Math.random() < 0.15) { // 15% chance
+            if (attacker.name === 'Nymph') {
+                // Nymph steals all gold
+                if (defender.gold > 0) {
+                    this.audioManager.playSound('steal');
+                    this.addMessage(`${attacker.name} charms you and steals all your gold!`);
+                    defender.gold = 0;
+                }
+            } else {
+                // Leprechaun steals some gold
+                const stolenGold = Math.min(defender.gold, Math.floor(Math.random() * 50) + 10);
+                if (stolenGold > 0) {
+                    defender.gold -= stolenGold;
+                    this.audioManager.playSound('steal');
+                    this.addMessage(`${attacker.name} steals ${stolenGold} gold!`);
+                }
+            }
+        }
+    }
+    
     processTurn() {
+        // Process player status effects first
+        this.processPlayerStatusEffects();
+        
+        // Process monster special abilities
+        this.processMonsterAbilities();
+        
         // Enemy AI
         this.entities.forEach(enemy => {
             if (enemy.type === 'enemy' && enemy.alive) {
@@ -207,7 +366,89 @@ class Game {
         this.updateUI();
     }
     
+    processPlayerStatusEffects() {
+        if (!this.player.statusEffects) return;
+        
+        // Process poison
+        if (this.player.statusEffects.poisoned && this.turn >= this.player.statusEffects.poisoned) {
+            delete this.player.statusEffects.poisoned;
+            this.addMessage("You feel better as the poison wears off.");
+        } else if (this.player.statusEffects.poisoned) {
+            // Take poison damage
+            const poisonDamage = Math.floor(Math.random() * 3) + 1;
+            this.player.hp = Math.max(1, this.player.hp - poisonDamage);
+            this.audioManager.playSound('hurt');
+            this.addMessage(`The poison courses through your veins for ${poisonDamage} damage!`);
+        }
+        
+        // Process paralysis
+        if (this.player.statusEffects.paralyzed && this.turn >= this.player.statusEffects.paralyzed) {
+            delete this.player.statusEffects.paralyzed;
+            this.addMessage("You can move again!");
+        }
+        
+        // Process confusion
+        if (this.player.statusEffects.confused && this.turn >= this.player.statusEffects.confused) {
+            delete this.player.statusEffects.confused;
+            this.addMessage("Your head clears.");
+        }
+    }
+    
+    processMonsterAbilities() {
+        this.entities.forEach(enemy => {
+            if (enemy.type === 'enemy' && enemy.alive) {
+                // Regeneration ability - heal every 4-8 turns
+                if (enemy.canRegenerate && 
+                    (!enemy.lastRegenTurn || this.turn - enemy.lastRegenTurn >= (4 + Math.floor(Math.random() * 5)))) {
+                    const regenAmount = Math.floor(enemy.maxHp * 0.1); // 10% of max HP
+                    if (enemy.hp < enemy.maxHp) {
+                        enemy.hp = Math.min(enemy.maxHp, enemy.hp + regenAmount);
+                        enemy.lastRegenTurn = this.turn;
+                        
+                        // Show regeneration message if player can see the monster
+                        if (this.isMonsterVisible(enemy)) {
+                            this.addMessage(`${enemy.name} regenerates health!`);
+                        }
+                    }
+                }
+                
+                // Invisibility processing - monsters randomly become visible/invisible
+                if (enemy.hasInvisibility) {
+                    if (Math.random() < 0.05) { // 5% chance per turn to change visibility
+                        enemy.isInvisible = !enemy.isInvisible;
+                        if (this.isMonsterVisible(enemy) && !enemy.isInvisible) {
+                            this.addMessage(`${enemy.name} suddenly appears!`);
+                        }
+                    }
+                }
+                
+                // Mean monsters become more aggressive when hurt
+                if (enemy.isMean && enemy.hp < enemy.maxHp * 0.5) {
+                    enemy.speed = enemy.baseSpeed * 1.5; // Move faster when hurt
+                }
+            }
+        });
+    }
+    
+    isMonsterVisible(monster) {
+        // Calculate distance to player
+        const distance = Math.abs(this.player.x - monster.x) + Math.abs(this.player.y - monster.y);
+        
+        // Invisible monsters are harder to see
+        if (monster.isInvisible) {
+            return distance <= 1 && Math.random() < 0.3; // 30% chance to see adjacent invisible monsters
+        }
+        
+        // Normal visibility based on distance and lighting
+        return distance <= 8; // Can see monsters within 8 tiles
+    }
+    
     moveEnemyTowardsPlayer(enemy) {
+        // Skip turn occasionally for some monsters (representing confusion, hesitation, etc.)
+        if (enemy.isMean && Math.random() < 0.1) {
+            return; // Mean monsters sometimes pause to strategize
+        }
+        
         const dx = Math.sign(this.player.x - enemy.x);
         const dy = Math.sign(this.player.y - enemy.y);
         
@@ -221,22 +462,89 @@ class Game {
         let newX = enemy.x;
         let newY = enemy.y;
         
+        // Flying monsters can move over certain obstacles
+        const canMoveOverObstacles = enemy.canFly;
+        
         if (Math.random() < 0.5) {
-            if (dx !== 0 && this.isValidMove(enemy.x + dx, enemy.y) && !this.getEnemyAt(enemy.x + dx, enemy.y)) {
+            if (dx !== 0 && this.isValidMoveForEnemy(enemy.x + dx, enemy.y, canMoveOverObstacles) && 
+                !this.getEnemyAt(enemy.x + dx, enemy.y)) {
                 newX = enemy.x + dx;
-            } else if (dy !== 0 && this.isValidMove(enemy.x, enemy.y + dy) && !this.getEnemyAt(enemy.x, enemy.y + dy)) {
+            } else if (dy !== 0 && this.isValidMoveForEnemy(enemy.x, enemy.y + dy, canMoveOverObstacles) && 
+                       !this.getEnemyAt(enemy.x, enemy.y + dy)) {
                 newY = enemy.y + dy;
             }
         } else {
-            if (dy !== 0 && this.isValidMove(enemy.x, enemy.y + dy) && !this.getEnemyAt(enemy.x, enemy.y + dy)) {
+            if (dy !== 0 && this.isValidMoveForEnemy(enemy.x, enemy.y + dy, canMoveOverObstacles) && 
+                !this.getEnemyAt(enemy.x, enemy.y + dy)) {
                 newY = enemy.y + dy;
-            } else if (dx !== 0 && this.isValidMove(enemy.x + dx, enemy.y) && !this.getEnemyAt(enemy.x + dx, enemy.y)) {
+            } else if (dx !== 0 && this.isValidMoveForEnemy(enemy.x + dx, enemy.y, canMoveOverObstacles) && 
+                       !this.getEnemyAt(enemy.x + dx, enemy.y)) {
                 newX = enemy.x + dx;
+            }
+        }
+        
+        // Special behavior for thieves - try to steal and run away
+        if (enemy.canSteal && Math.abs(this.player.x - newX) <= 1 && Math.abs(this.player.y - newY) <= 1) {
+            if (Math.random() < 0.3) { // 30% chance to attempt theft
+                this.attemptTheft(enemy);
+                return; // Don't move after stealing attempt
             }
         }
         
         enemy.x = newX;
         enemy.y = newY;
+    }
+    
+    isValidMoveForEnemy(x, y, canFly) {
+        if (x < 0 || x >= this.mapWidth || y < 0 || y >= this.mapHeight) return false;
+        
+        const cell = this.dungeon[y][x];
+        
+        // Flying enemies can move over some obstacles
+        if (canFly) {
+            return cell !== '#'; // Can't fly through solid walls
+        }
+        
+        // Ground enemies follow normal movement rules
+        return this.isValidMove(x, y);
+    }
+    
+    attemptTheft(thief) {
+        if (this.player.inventory.length === 0) {
+            this.addMessage(`${thief.name} tries to steal but you have nothing!`);
+            return;
+        }
+        
+        // Steal a random item
+        const stolenIndex = Math.floor(Math.random() * this.player.inventory.length);
+        const stolenItem = this.player.inventory[stolenIndex];
+        
+        this.player.inventory.splice(stolenIndex, 1);
+        this.addMessage(`${thief.name} steals your ${stolenItem.name}!`);
+        
+        // Thief tries to run away after stealing
+        const escapeDirections = [
+            {x: -1, y: 0}, {x: 1, y: 0}, {x: 0, y: -1}, {x: 0, y: 1},
+            {x: -1, y: -1}, {x: 1, y: -1}, {x: -1, y: 1}, {x: 1, y: 1}
+        ];
+        
+        // Move away from player
+        for (let dir of escapeDirections) {
+            const newX = thief.x + dir.x;
+            const newY = thief.y + dir.y;
+            
+            if (this.isValidMoveForEnemy(newX, newY, thief.canFly) && !this.getEnemyAt(newX, newY)) {
+                // Move further from player
+                const currentDist = Math.abs(this.player.x - thief.x) + Math.abs(this.player.y - thief.y);
+                const newDist = Math.abs(this.player.x - newX) + Math.abs(this.player.y - newY);
+                
+                if (newDist > currentDist) {
+                    thief.x = newX;
+                    thief.y = newY;
+                    break;
+                }
+            }
+        }
     }
     
     generateDungeon() {
@@ -346,30 +654,21 @@ class Game {
     }
     
     spawnEnemies() {
-        const enemyTypes = [
-            { name: 'Goblin', symbol: 'g', hp: 15, attack: 5, defense: 1, experience: 10, gold: 5 },
-            { name: 'Orc', symbol: 'o', hp: 25, attack: 8, defense: 3, experience: 20, gold: 10 },
-            { name: 'Skeleton', symbol: 's', hp: 20, attack: 7, defense: 2, experience: 15, gold: 8 }
-        ];
-        
+        // 新しい強化モンスターシステムを使用
         // Spawn enemies in rooms (except first room where player starts)
         for (let i = 1; i < this.rooms.length; i++) {
             const room = this.rooms[i];
-            const numEnemies = this.random(1, 3);
+            // 階層が上がると敵の数も増える
+            const numEnemies = this.random(1, Math.min(4, 2 + Math.floor(this.floor / 3)));
             
             for (let j = 0; j < numEnemies; j++) {
-                const enemyType = enemyTypes[this.random(0, enemyTypes.length)];
                 const x = this.random(room.x + 1, room.x + room.width - 1);
                 const y = this.random(room.y + 1, room.y + room.height - 1);
                 
                 if (this.dungeon[y][x] === '.' && !this.getEnemyAt(x, y)) {
-                    this.entities.push({
-                        ...enemyType,
-                        x, y,
-                        type: 'enemy',
-                        alive: true,
-                        color: this.colors.enemy
-                    });
+                    // 強化モンスターシステムで敵を生成
+                    const enemy = this.createEnhancedMonster(x, y, this.floor);
+                    this.entities.push(enemy);
                 }
             }
         }
@@ -410,6 +709,7 @@ class Game {
         if (item) {
             if (item.type === 'gold') {
                 this.player.gold += item.value;
+                this.audioManager.playSound('gold');
                 this.addMessage(`You picked up ${item.value} gold!`, 'item');
             } else {
                 // インベントリに追加する際に新しいIDを割り当て（重複防止）
@@ -418,6 +718,7 @@ class Game {
                     id: this.nextItemId++
                 };
                 this.player.inventory.push(inventoryItem);
+                this.audioManager.playSound('itemPickup');
                 this.addMessage(`You picked up ${item.name}!`, 'item');
             }
             
@@ -522,6 +823,7 @@ class Game {
                     return;
                 }
                 this.player.hp = Math.min(this.player.maxHp, this.player.hp + item.value);
+                this.audioManager.playSound('heal');
                 this.addMessage(`You drink the ${item.name} and recover ${item.value} HP!`, 'item');
             } else if (item.effect === 'mana') {
                 if (this.player.mp >= this.player.maxMp) {
@@ -529,6 +831,7 @@ class Game {
                     return;
                 }
                 this.player.mp = Math.min(this.player.maxMp, this.player.mp + item.value);
+                this.audioManager.playSound('mana');
                 this.addMessage(`You drink the ${item.name} and recover ${item.value} MP!`, 'item');
             }
             
@@ -594,6 +897,9 @@ class Game {
             // 装備込みステータスを再計算
             this.updatePlayerStats();
             
+            // Play level up sound
+            this.audioManager.playSound('levelUp');
+            
             this.addMessage(`Level up! You are now level ${this.player.level}!`, 'system');
             this.addMessage(`HP +${hpIncrease}, MP +${mpIncrease}, Attack +${attackIncrease}, Defense +${defenseIncrease}`, 'system');
         }
@@ -601,6 +907,7 @@ class Game {
     
     descendStairs() {
         this.floor++; // 階層を増やす
+        this.audioManager.playSound('stairs');
         this.addMessage(`You descend deeper into the dungeon... (Floor ${this.floor})`, 'system');
         this.generateDungeon();
         
@@ -1002,6 +1309,7 @@ class Game {
             
             // 新しい武器を装備
             this.player.equipment.weapon = item;
+            this.audioManager.playSound('equip');
             this.addMessage(`You equip ${item.name}! Attack +${item.attack}`, 'item');
             
         } else if (item.type === 'armor') {
@@ -1029,6 +1337,7 @@ class Game {
             
             // 新しい防具を装備
             this.player.equipment.armor = item;
+            this.audioManager.playSound('equip');
             this.addMessage(`You equip ${item.name}! Defense +${item.defense}`, 'item');
         }
         
@@ -1241,6 +1550,165 @@ class Game {
     
     random(min, max) {
         return Math.floor(Math.random() * (max - min)) + min;
+    }
+    
+    // セーブ機能
+    // ===== 🆕 セーブ/ロードシステム =====
+    saveGame() {
+        try {
+            const gameData = {
+                version: '1.4.0',
+                timestamp: new Date().toISOString(),
+                player: {
+                    ...this.player,
+                    inventory: [...this.player.inventory],
+                    equipment: {
+                        weapon: this.player.equipment.weapon ? {...this.player.equipment.weapon} : null,
+                        armor: this.player.equipment.armor ? {...this.player.equipment.armor} : null
+                    }
+                },
+                dungeon: this.dungeon.map(row => [...row]),
+                entities: this.entities.map(entity => ({...entity})),
+                items: this.items.map(item => ({...item})),
+                rooms: this.rooms.map(room => ({...room})),
+                turn: this.turn,
+                floor: this.floor,
+                nextItemId: this.nextItemId,
+                messages: [...this.messages]
+            };
+            
+            localStorage.setItem('roguelike_save', JSON.stringify(gameData));
+            this.addMessage('Game saved successfully!', 'system');
+            console.log('🎮 Game saved to localStorage');
+        } catch (error) {
+            this.addMessage('Failed to save game!', 'system');
+            console.error('💥 Save failed:', error);
+        }
+    }
+    
+    loadGame() {
+        try {
+            const savedData = localStorage.getItem('roguelike_save');
+            if (!savedData) {
+                this.addMessage('No saved game found!', 'system');
+                return;
+            }
+            
+            const gameData = JSON.parse(savedData);
+            
+            // データの復元
+            this.player = gameData.player;
+            this.dungeon = gameData.dungeon;
+            this.entities = gameData.entities;
+            this.items = gameData.items;
+            this.rooms = gameData.rooms;
+            this.turn = gameData.turn || 0;
+            this.floor = gameData.floor || 1;
+            this.nextItemId = gameData.nextItemId || 0;
+            this.messages = gameData.messages || [];
+            
+            // プレイヤーのメソッドを復元
+            this.player.rest = function() {
+                this.hp = Math.min(this.maxHp, this.hp + 2);
+                this.mp = Math.min(this.maxMp, this.mp + 1);
+            };
+            
+            // レンダリングとUI更新
+            this.render();
+            this.updateUI();
+            
+            this.addMessage(`Game loaded! (Floor ${this.floor}, Turn ${this.turn})`, 'system');
+            console.log('🎮 Game loaded from localStorage');
+        } catch (error) {
+            this.addMessage('Failed to load game!', 'system');
+            console.error('💥 Load failed:', error);
+        }
+    }
+    
+    // ===== 🆕 強化されたモンスターシステム =====
+    createEnhancedMonster(x, y, floor) {
+        // オリジナルRogue風のモンスター26種類（A-Z）
+        const monsterTypes = [
+            // Tier 1 (Floor 1-3)
+            { char: 'B', name: 'Bat', hp: 8, attack: 3, defense: 1, exp: 2, abilities: ['fly'] },
+            { char: 'E', name: 'Emu', hp: 12, attack: 4, defense: 2, exp: 3, abilities: ['mean'] },
+            { char: 'H', name: 'Hobgoblin', hp: 15, attack: 6, defense: 3, exp: 5, abilities: ['mean'] },
+            { char: 'K', name: 'Kestrel', hp: 10, attack: 5, defense: 2, exp: 4, abilities: ['fly', 'mean'] },
+            { char: 'S', name: 'Snake', hp: 10, attack: 4, defense: 2, exp: 3, abilities: ['mean'] },
+            
+            // Tier 2 (Floor 4-6)
+            { char: 'C', name: 'Centaur', hp: 25, attack: 8, defense: 4, exp: 15, abilities: [] },
+            { char: 'I', name: 'Ice Monster', hp: 18, attack: 6, defense: 5, exp: 8, abilities: ['freeze'] },
+            { char: 'L', name: 'Leprechaun', hp: 20, attack: 5, defense: 6, exp: 12, abilities: ['steal'] },
+            { char: 'O', name: 'Orc', hp: 22, attack: 7, defense: 4, exp: 10, abilities: ['greed'] },
+            { char: 'R', name: 'Rattlesnake', hp: 16, attack: 8, defense: 3, exp: 12, abilities: ['poison', 'mean'] },
+            
+            // Tier 3 (Floor 7-10)
+            { char: 'A', name: 'Aquator', hp: 35, attack: 10, defense: 5, exp: 25, abilities: ['rust', 'mean'] },
+            { char: 'N', name: 'Nymph', hp: 28, attack: 6, defense: 7, exp: 20, abilities: ['steal_all'] },
+            { char: 'Q', name: 'Quagga', hp: 30, attack: 9, defense: 5, exp: 18, abilities: ['mean'] },
+            { char: 'T', name: 'Troll', hp: 45, attack: 12, defense: 6, exp: 35, abilities: ['regen', 'mean'] },
+            { char: 'Z', name: 'Zombie', hp: 25, attack: 8, defense: 4, exp: 15, abilities: ['mean'] },
+            
+            // Tier 4 (Floor 11-15)
+            { char: 'F', name: 'Venus Flytrap', hp: 50, attack: 14, defense: 7, exp: 45, abilities: ['hold', 'mean'] },
+            { char: 'M', name: 'Medusa', hp: 40, attack: 16, defense: 6, exp: 40, abilities: ['confusion', 'mean'] },
+            { char: 'P', name: 'Phantom', hp: 35, attack: 12, defense: 8, exp: 50, abilities: ['invisible'] },
+            { char: 'U', name: 'Black Unicorn', hp: 55, attack: 18, defense: 4, exp: 60, abilities: ['mean'] },
+            { char: 'W', name: 'Wraith', hp: 38, attack: 14, defense: 7, exp: 45, abilities: ['drain'] },
+            
+            // Tier 5 (Floor 16-20)
+            { char: 'G', name: 'Griffin', hp: 70, attack: 20, defense: 8, exp: 80, abilities: ['fly', 'regen', 'mean'] },
+            { char: 'V', name: 'Vampire', hp: 60, attack: 22, defense: 6, exp: 90, abilities: ['regen', 'drain', 'mean'] },
+            { char: 'X', name: 'Xeroc', hp: 50, attack: 16, defense: 9, exp: 70, abilities: ['mimic'] },
+            { char: 'Y', name: 'Yeti', hp: 65, attack: 18, defense: 7, exp: 75, abilities: ['freeze'] },
+            
+            // Tier 6 (Floor 21+)
+            { char: 'D', name: 'Dragon', hp: 120, attack: 30, defense: 10, exp: 200, abilities: ['flame', 'mean'] },
+            { char: 'J', name: 'Jabberwock', hp: 100, attack: 28, defense: 12, exp: 180, abilities: ['confusion'] }
+        ];
+        
+        // 階層に基づいてモンスターを選択
+        let availableMonsters = monsterTypes.filter(monster => {
+            if (floor <= 3) return monster.char.match(/[BEHKS]/);
+            if (floor <= 6) return monster.char.match(/[BEHKS]|[CILOR]/);
+            if (floor <= 10) return monster.char.match(/[BEHKS]|[CILOR]|[ANQTZ]/);
+            if (floor <= 15) return monster.char.match(/[BEHKS]|[CILOR]|[ANQTZ]|[FMPUW]/);
+            if (floor <= 20) return monster.char.match(/[BEHKS]|[CILOR]|[ANQTZ]|[FMPUW]|[GVXY]/);
+            return monsterTypes; // 21階以降はすべて
+        });
+        
+        if (availableMonsters.length === 0) {
+            availableMonsters = [monsterTypes[0]]; // フォールバック
+        }
+        
+        const template = availableMonsters[this.random(0, availableMonsters.length)];
+        
+        // 階層による強化
+        const floorMultiplier = 1 + (floor - 1) * 0.1;
+        
+        return {
+            name: template.name,
+            symbol: template.char,
+            x: x,
+            y: y,
+            hp: Math.floor(template.hp * floorMultiplier),
+            maxHp: Math.floor(template.hp * floorMultiplier),
+            attack: Math.floor(template.attack * floorMultiplier),
+            defense: Math.floor(template.defense * floorMultiplier),
+            experience: Math.floor(template.exp * floorMultiplier),
+            gold: this.random(5, 25) + floor * 2,
+            type: 'enemy',
+            alive: true,
+            color: this.colors.enemy,
+            abilities: [...template.abilities],
+            // 特殊能力フラグ
+            canFly: template.abilities.includes('fly'),
+            isInvisible: template.abilities.includes('invisible'),
+            canRegenerate: template.abilities.includes('regen'),
+            isMean: template.abilities.includes('mean'),
+            lastRegenTurn: 0
+        };
     }
 }
 
