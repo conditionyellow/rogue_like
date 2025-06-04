@@ -144,7 +144,7 @@ class Game {
                 this.startItemSelection();
                 break;
             case 'i':
-                this.toggleInventory();
+                this.showInventoryUI();
                 break;
             case 'e':
                 this.showEquipment();
@@ -263,11 +263,13 @@ class Game {
             defender.alive = false;
             if (defender === this.player) {
                 this.audioManager.playSound('death');
-                this.gameOver();
+                this.gameOver(attacker.name); // 殺したモンスターの名前を渡す
             } else {
                 this.audioManager.playSound('enemyDeath');
                 this.addMessage(`${defender.name} dies!`, 'combat');
+                console.log(`DEBUG: Before exp gain - Player exp: ${this.player.experience}, Monster exp: ${defender.experience}`);
                 this.player.experience += defender.experience;
+                console.log(`DEBUG: After exp gain - Player exp: ${this.player.experience}, Needed: ${this.player.experienceToNext}`);
                 this.player.gold += defender.gold;
                 this.checkLevelUp();
             }
@@ -876,6 +878,7 @@ class Game {
     }
     
     checkLevelUp() {
+        console.log(`DEBUG: checkLevelUp called - Current exp: ${this.player.experience}, Needed: ${this.player.experienceToNext}`);
         if (this.player.experience >= this.player.experienceToNext) {
             this.player.level++;
             this.player.experience -= this.player.experienceToNext;
@@ -923,10 +926,14 @@ class Game {
         this.spawnItems();
     }
     
-    gameOver() {
+    gameOver(killer = null) {
         this.gameState = 'dead';
         this.addMessage("You have died! Game Over.", 'combat');
-        this.addMessage("Press F5 to restart.", 'system');
+        
+        // ゲームオーバー画面を表示
+        setTimeout(() => {
+            this.showGameOverScreen(killer);
+        }, 1000); // 1秒後に表示
     }
     
     toggleInventory() {
@@ -1708,6 +1715,179 @@ class Game {
             canRegenerate: template.abilities.includes('regen'),
             isMean: template.abilities.includes('mean'),
             lastRegenTurn: 0
+        };
+    }
+    
+    showGameOverScreen(killer = null) {
+        // 画面の高さに応じてサイズを調整
+        const screenHeight = window.innerHeight;
+        const isSmallScreen = screenHeight < 700;
+        
+        // オーバーレイの作成
+        const overlay = document.createElement('div');
+        overlay.id = 'gameOverOverlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            font-family: 'Courier New', monospace;
+            color: #FFFFFF;
+            padding: 10px;
+            box-sizing: border-box;
+        `;
+        
+        // ゲームオーバーウィンドウの作成
+        const gameOverWindow = document.createElement('div');
+        const fontSize = isSmallScreen ? '10px' : '12px';
+        const padding = isSmallScreen ? '15px' : '20px';
+        const maxHeight = isSmallScreen ? '95vh' : '90vh';
+        
+        gameOverWindow.style.cssText = `
+            background-color: #000000;
+            border: 3px solid #FFFFFF;
+            padding: ${padding};
+            max-width: 700px;
+            max-height: ${maxHeight};
+            text-align: center;
+            font-size: ${fontSize};
+            line-height: 1.1;
+            white-space: pre-line;
+            overflow-y: auto;
+            box-sizing: border-box;
+            border-radius: 5px;
+        `;
+        
+        // お墓のAAアート（コンパクト版）
+        const tombstone = `                   __________
+                  /          \\
+                 /    REST    \\
+                /      IN      \\
+               /     PEACE      \\
+              /                  \\
+              |                  |
+              |   killed by      |
+              |                  |
+              |      2025        |
+             *|     *  *  *      | *
+     ________)/\\\\_//(\\/(/\\)/\\//\\/|_)_______`;
+        
+        // 死因を取得
+        let causeOfDeath = "mysterious circumstances";
+        if (killer) {
+            // 英語の冠詞を適切に設定
+            const vowels = ['A', 'E', 'I', 'O', 'U'];
+            const article = vowels.includes(killer.charAt(0).toUpperCase()) ? 'an' : 'a';
+            causeOfDeath = `${article} ${killer}`;
+        }
+        
+        // 墓石の文字部分をカスタマイズ
+        const customTombstone = tombstone.replace('killed by a', `killed by`);
+        
+        // スコア計算
+        const score = this.calculateFinalScore();
+        
+        // 統計情報
+        const stats = this.getGameStats();
+        
+        // HTMLコンテンツの作成（画面サイズに応じて調整）
+        const titleSize = isSmallScreen ? '16px' : '18px';
+        const causeSize = isSmallScreen ? '12px' : '14px';
+        const tombstoneSize = isSmallScreen ? '9px' : '10px';
+        const statsSize = isSmallScreen ? '10px' : '11px';
+        const controlsSize = isSmallScreen ? '10px' : '12px';
+        
+        gameOverWindow.innerHTML = `
+            <div style="color: #FF6666; font-size: ${titleSize}; font-weight: bold; margin-bottom: ${isSmallScreen ? '10px' : '15px'};">
+                💀 GAME OVER 💀
+            </div>
+            
+            <div style="color: #CCCCCC; font-family: monospace; font-size: ${tombstoneSize}; margin-bottom: ${isSmallScreen ? '10px' : '15px'};">
+${customTombstone}
+            </div>
+            
+            <div style="color: #FFAA00; font-size: ${causeSize}; margin-bottom: ${isSmallScreen ? '8px' : '10px'};">
+                <strong>Cause of Death:</strong> ${causeOfDeath}
+            </div>
+            
+            <div style="color: #66FF66; margin-bottom: ${isSmallScreen ? '10px' : '15px'};">
+                <strong>Final Score:</strong> ${score} points
+            </div>
+            
+            <div style="color: #AAAAAA; margin-bottom: ${isSmallScreen ? '10px' : '15px'}; text-align: left; display: inline-block; font-size: ${statsSize};">
+                <strong>📊 Statistics:</strong><br>
+                Level: ${this.player.level} • Floor: ${this.floor} • Turns: ${this.turn}<br>
+                Gold: ${this.player.gold} • EXP: ${this.player.experience}<br>
+                Monsters Defeated: ${stats.monstersKilled} • Items: ${stats.itemsFound}<br>
+                <br>
+                <strong>⚔️ Equipment:</strong><br>
+                Weapon: ${this.player.equipment.weapon ? this.player.equipment.weapon.name : 'None'}<br>
+                Armor: ${this.player.equipment.armor ? this.player.equipment.armor.name : 'None'}
+            </div>
+            
+            <div style="color: #FFFF66; margin-top: ${isSmallScreen ? '10px' : '15px'}; font-size: ${controlsSize};">
+                <strong>🎮 Press [R] to restart • [ESC] to close</strong>
+            </div>
+        `;
+        
+        overlay.appendChild(gameOverWindow);
+        document.body.appendChild(overlay);
+        
+        // キーボードイベントリスナーを追加
+        const handleGameOverInput = (e) => {
+            if (e.key.toLowerCase() === 'r') {
+                // ゲームリスタート
+                location.reload();
+            } else if (e.key === 'Escape') {
+                // 画面を閉じる
+                overlay.remove();
+                document.removeEventListener('keydown', handleGameOverInput);
+            }
+        };
+        
+        document.addEventListener('keydown', handleGameOverInput);
+        
+        // クリックで閉じる
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                overlay.remove();
+                document.removeEventListener('keydown', handleGameOverInput);
+            }
+        });
+    }
+    
+    calculateFinalScore() {
+        // オリジナルRogueスタイルのスコア計算
+        let score = 0;
+        score += this.player.gold * 1; // ゴールド
+        score += this.player.experience * 2; // 経験値
+        score += (this.player.level - 1) * 100; // レベル
+        score += this.floor * 50; // 到達階層
+        score += this.turn * 1; // 生存ターン数
+        
+        // 装備品ボーナス
+        if (this.player.equipment.weapon) {
+            score += this.player.equipment.weapon.attack * 25;
+        }
+        if (this.player.equipment.armor) {
+            score += this.player.equipment.armor.defense * 25;
+        }
+        
+        return score;
+    }
+    
+    getGameStats() {
+        // ゲーム統計情報を取得（簡易版）
+        // 実際のゲームではこれらの値を追跡する必要がある
+        return {
+            monstersKilled: Math.max(0, Math.floor((this.player.experience / 10) - 5)),
+            itemsFound: this.player.inventory.length + (this.player.equipment.weapon ? 1 : 0) + (this.player.equipment.armor ? 1 : 0)
         };
     }
 }
