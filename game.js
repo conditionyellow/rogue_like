@@ -225,7 +225,7 @@ class Game {
         this.audioManager.playSound('footstep');
         
         // Check for stairs
-        if (this.dungeon[newY][newX] === 'S') {
+        if (this.dungeon[newY][newX] === '%') {
             this.descendStairs();
         }
         
@@ -238,7 +238,7 @@ class Game {
         }
         
         const tile = this.dungeon[y][x];
-        return tile === '.' || tile === 'S'; // floor or stairs
+        return tile === '.' || tile === '%'; // floor or stairs
     }
     
     getEnemyAt(x, y) {
@@ -588,7 +588,7 @@ class Game {
             const lastRoom = rooms[rooms.length - 1];
             const stairX = lastRoom.x + Math.floor(lastRoom.width / 2);
             const stairY = lastRoom.y + Math.floor(lastRoom.height / 2);
-            this.dungeon[stairY][stairX] = 'S';
+            this.dungeon[stairY][stairX] = '%';
         }
         
         this.rooms = rooms;
@@ -688,7 +688,7 @@ class Game {
             { name: 'Mana Potion', symbol: '!', type: 'potion', effect: 'mana', value: 20, color: this.colors.potion },
             { name: 'Sword', symbol: ')', type: 'weapon', attack: 5, color: this.colors.weapon },
             { name: 'Shield', symbol: ']', type: 'armor', defense: 3, color: this.colors.weapon },
-            { name: 'Gold Coin', symbol: '$', type: 'gold', value: 25, color: this.colors.item }
+            { name: 'Gold Coin', symbol: '*', type: 'gold', value: 25, color: this.colors.item }
         ];
         
         // Spawn items randomly in rooms
@@ -1530,7 +1530,7 @@ class Game {
             case '.':
                 this.ctx.fillStyle = this.colors.floor;
                 break;
-            case 'S':
+            case '%':
                 this.ctx.fillStyle = this.colors.floor;
                 break;
             default:
@@ -1540,8 +1540,8 @@ class Game {
         this.ctx.fillRect(pixelX, pixelY, this.tileSize, this.tileSize);
 
         // Render stairs symbol
-        if (tile === 'S') {
-            this.renderEntity(x, y, '>', this.colors.stairs);
+        if (tile === '%') {
+            this.renderEntity(x, y, '%', this.colors.stairs);
         }
     }
     
