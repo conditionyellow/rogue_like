@@ -20,6 +20,7 @@ class Game {
         this.gameState = 'playing'; // playing, inventory, item_selection, dead
         this.itemSelectionMode = false;
         this.inventoryUIActive = false; // 専用インベントリUI表示フラグ
+        this.systemSettingsUIActive = false; // システム設定UI表示フラグ
         this.nextItemId = 0; // グローバルアイテムIDカウンター
         
         // Initialize audio system
@@ -77,22 +78,6 @@ class Game {
     
     setupEventListeners() {
         document.addEventListener('keydown', (e) => this.handleInput(e));
-        
-        // Audio controls
-        const volumeSlider = document.getElementById('volumeSlider');
-        const muteButton = document.getElementById('muteButton');
-        const volumeValue = document.getElementById('volumeValue');
-        
-        volumeSlider.addEventListener('input', (e) => {
-            const volume = e.target.value / 100;
-            this.audioManager.setVolume(volume);
-            volumeValue.textContent = `${e.target.value}%`;
-        });
-        
-        muteButton.addEventListener('click', () => {
-            const isMuted = this.audioManager.toggleMute();
-            muteButton.textContent = isMuted ? '🔇 Unmute' : '🔊 Mute';
-        });
     }
     
     handleInput(e) {
@@ -101,6 +86,12 @@ class Game {
         // Initialize audio on first input
         if (!this.audioInitialized) {
             this.initializeAudio();
+        }
+        
+        // システム設定UI表示中の処理
+        if (this.systemSettingsUIActive) {
+            this.handleSystemSettingsInput(e);
+            return;
         }
         
         // インベントリUI表示中の処理
@@ -156,14 +147,17 @@ class Game {
             case 'i':
                 this.showInventoryUI();
                 break;
+            case 's':
+                this.showSystemSettingsUI();
+                break;
             case 'e':
                 this.showEquipment();
                 break;
             case 'r':
-                this.readScroll();
-                break;
-            case 'u':
                 this.removeEquipment();
+                break;
+            case 't':
+                this.readScroll();
                 break;
             // 🆕 セーブ/ロード機能
             case 'ctrl+s':
@@ -2000,6 +1994,243 @@ class Game {
         this.items.push(droppedItem);
         this.removeItemFromInventory(item.id);
         this.addMessage(`You drop ${item.name}.`, 'item');
+    }
+
+    // === システム設定UIシステム ===
+    
+    showSystemSettingsUI() {
+        this.systemSettingsUIActive = true;
+        this.createSystemSettingsUI();
+    }
+    
+    hideSystemSettingsUI() {
+        this.systemSettingsUIActive = false;
+        this.removeSystemSettingsUI();
+    }
+    
+    createSystemSettingsUI() {
+        // 既存のシステム設定UIがあれば削除
+        this.removeSystemSettingsUI();
+        
+        // オーバーレイ背景を作成
+        const overlay = document.createElement('div');
+        overlay.id = 'systemSettingsOverlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        `;
+        
+        // システム設定ウィンドウを作成
+        const settingsWindow = document.createElement('div');
+        settingsWindow.id = 'systemSettingsWindow';
+        settingsWindow.style.cssText = `
+            background-color: #2c3e50;
+            border: 3px solid #34495e;
+            border-radius: 8px;
+            padding: 25px;
+            min-width: 400px;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            color: #ecf0f1;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        `;
+        
+        // ヘッダー
+        const header = document.createElement('div');
+        header.style.cssText = `
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #34495e;
+            padding-bottom: 10px;
+            color: #3498db;
+        `;
+        header.textContent = '⚙️ System Settings';
+        settingsWindow.appendChild(header);
+        
+        // オーディオ設定セクション
+        const audioSection = document.createElement('div');
+        audioSection.style.cssText = `
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #34495e;
+            border-radius: 5px;
+            background-color: #34495e;
+        `;
+        
+        const audioTitle = document.createElement('h3');
+        audioTitle.style.cssText = `
+            margin: 0 0 15px 0;
+            font-size: 16px;
+            color: #f39c12;
+        `;
+        audioTitle.textContent = '🔊 Audio Controls';
+        audioSection.appendChild(audioTitle);
+        
+        // 音量スライダー
+        const volumeContainer = document.createElement('div');
+        volumeContainer.style.cssText = `
+            margin-bottom: 15px;
+        `;
+        
+        const volumeLabel = document.createElement('label');
+        volumeLabel.style.cssText = `
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+        `;
+        volumeLabel.textContent = 'Master Volume: ';
+        
+        const volumeValueSpan = document.createElement('span');
+        volumeValueSpan.id = 'systemVolumeValue';
+        volumeValueSpan.style.cssText = `
+            color: #3498db;
+            font-weight: bold;
+        `;
+        volumeValueSpan.textContent = `${Math.round(this.audioManager.masterVolume * 100)}%`;
+        volumeLabel.appendChild(volumeValueSpan);
+        
+        const volumeSlider = document.createElement('input');
+        volumeSlider.type = 'range';
+        volumeSlider.min = '0';
+        volumeSlider.max = '100';
+        volumeSlider.value = Math.round(this.audioManager.masterVolume * 100);
+        volumeSlider.id = 'systemVolumeSlider';
+        volumeSlider.style.cssText = `
+            width: 100%;
+            margin: 5px 0;
+            background-color: #7f8c8d;
+            outline: none;
+            appearance: none;
+            height: 8px;
+            border-radius: 5px;
+            cursor: pointer;
+        `;
+        
+        // スライダーのスタイル調整
+        const sliderStyle = document.createElement('style');
+        sliderStyle.textContent = `
+            #systemVolumeSlider::-webkit-slider-thumb {
+                appearance: none;
+                width: 18px;
+                height: 18px;
+                border-radius: 50%;
+                background-color: #3498db;
+                cursor: pointer;
+            }
+            #systemVolumeSlider::-moz-range-thumb {
+                width: 18px;
+                height: 18px;
+                border-radius: 50%;
+                background-color: #3498db;
+                cursor: pointer;
+                border: none;
+            }
+            .system-button {
+                background-color: #3498db;
+                color: #FFFFFF;
+                border: none;
+                padding: 8px 16px;
+                font-size: 14px;
+                font-family: 'Courier New', monospace;
+                cursor: pointer;
+                border-radius: 4px;
+                margin: 5px;
+                transition: background-color 0.2s;
+            }
+            .system-button:hover {
+                background-color: #2980b9;
+            }
+            .system-button.muted {
+                background-color: #e74c3c;
+            }
+            .system-button.muted:hover {
+                background-color: #c0392b;
+            }
+        `;
+        document.head.appendChild(sliderStyle);
+        
+        volumeSlider.addEventListener('input', (e) => {
+            const volume = e.target.value / 100;
+            this.audioManager.setVolume(volume);
+            volumeValueSpan.textContent = `${e.target.value}%`;
+        });
+        
+        volumeContainer.appendChild(volumeLabel);
+        volumeContainer.appendChild(volumeSlider);
+        audioSection.appendChild(volumeContainer);
+        
+        // ミュートボタン
+        const muteButton = document.createElement('button');
+        muteButton.className = this.audioManager.isMuted ? 'system-button muted' : 'system-button';
+        muteButton.textContent = this.audioManager.isMuted ? '🔇 Unmute' : '🔊 Mute';
+        muteButton.addEventListener('click', () => {
+            const isMuted = this.audioManager.toggleMute();
+            muteButton.textContent = isMuted ? '🔇 Unmute' : '🔊 Mute';
+            muteButton.className = isMuted ? 'system-button muted' : 'system-button';
+        });
+        
+        audioSection.appendChild(muteButton);
+        settingsWindow.appendChild(audioSection);
+        
+        // 操作案内
+        const controls = document.createElement('div');
+        controls.style.cssText = `
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #34495e;
+            font-size: 12px;
+            color: #bdc3c7;
+            text-align: center;
+        `;
+        controls.innerHTML = `
+            <strong>Controls:</strong><br>
+            ESC or S: Close settings
+        `;
+        settingsWindow.appendChild(controls);
+        
+        overlay.appendChild(settingsWindow);
+        document.body.appendChild(overlay);
+        
+        // ESCキーでクローズできるようにイベントリスナーを追加
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                this.hideSystemSettingsUI();
+            }
+        });
+    }
+    
+    removeSystemSettingsUI() {
+        const overlay = document.getElementById('systemSettingsOverlay');
+        if (overlay) {
+            overlay.remove();
+        }
+        // 動的に追加したスタイルも削除
+        const style = document.querySelector('style');
+        if (style && style.textContent.includes('#systemVolumeSlider')) {
+            style.remove();
+        }
+    }
+    
+    handleSystemSettingsInput(e) {
+        const key = e.key.toLowerCase();
+        
+        if (key === 'escape' || key === 's') {
+            this.hideSystemSettingsUI();
+        }
+        
+        e.preventDefault();
     }
     
     // Equipment System
