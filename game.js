@@ -878,10 +878,61 @@ class Game {
             });
         });
 
-        // 既存のアイテム追加
+        // オリジナル Rogue 5.4.4 準拠の武器定義
+        const weaponTypes = [
+            { name: 'mace', symbol: ')', type: 'weapon', attack: 6, range: 4, weight: 11 },
+            { name: 'long sword', symbol: ')', type: 'weapon', attack: 9, range: 4, weight: 9 },
+            { name: 'bow', symbol: ')', type: 'weapon', attack: 1, range: 1, launcher: true, weight: 2 },
+            { name: 'arrow', symbol: ')', type: 'weapon', attack: 3, range: 3, missile: true, launcher: 'bow', count: 15, weight: 2 },
+            { name: 'dagger', symbol: ')', type: 'weapon', attack: 3, range: 4, missile: true, count: 4, weight: 2 },
+            { name: 'two handed sword', symbol: ')', type: 'weapon', attack: 12, range: 4, weight: 6 },
+            { name: 'dart', symbol: ')', type: 'weapon', attack: 2, range: 3, missile: true, count: 12, weight: 12 },
+            { name: 'shuriken', symbol: ')', type: 'weapon', attack: 5, range: 4, missile: true, count: 8, weight: 2 },
+            { name: 'spear', symbol: ')', type: 'weapon', attack: 5, range: 6, missile: true, weight: 7 }
+        ];
+
+        // オリジナル Rogue 5.4.4 準拠の防具定義
+        const armorTypes = [
+            { name: 'leather armor', symbol: ']', type: 'armor', defense: 2, weight: 20 },
+            { name: 'studded leather armor', symbol: ']', type: 'armor', defense: 3, weight: 15 },
+            { name: 'ring mail', symbol: ']', type: 'armor', defense: 3, weight: 15 },
+            { name: 'scale mail', symbol: ']', type: 'armor', defense: 4, weight: 13 },
+            { name: 'chain mail', symbol: ']', type: 'armor', defense: 5, weight: 12 },
+            { name: 'banded mail', symbol: ']', type: 'armor', defense: 6, weight: 10 },
+            { name: 'splint mail', symbol: ']', type: 'armor', defense: 6, weight: 10 },
+            { name: 'plate mail', symbol: ']', type: 'armor', defense: 7, weight: 5 }
+        ];
+
+        // 武器を重み付きでitemTypesに追加
+        weaponTypes.forEach(weapon => {
+            itemTypes.push({
+                name: weapon.name.charAt(0).toUpperCase() + weapon.name.slice(1),
+                symbol: weapon.symbol,
+                type: weapon.type,
+                attack: weapon.attack,
+                range: weapon.range,
+                launcher: weapon.launcher,
+                missile: weapon.missile,
+                count: weapon.count,
+                color: this.colors.weapon,
+                weight: weapon.weight
+            });
+        });
+
+        // 防具を重み付きでitemTypesに追加
+        armorTypes.forEach(armor => {
+            itemTypes.push({
+                name: armor.name.charAt(0).toUpperCase() + armor.name.slice(1),
+                symbol: armor.symbol,
+                type: armor.type,
+                defense: armor.defense,
+                color: this.colors.weapon,
+                weight: armor.weight
+            });
+        });
+
+        // 通貨
         itemTypes.push(
-            { name: 'Sword', symbol: ')', type: 'weapon', attack: 5, color: this.colors.weapon, weight: 7 },
-            { name: 'Shield', symbol: ']', type: 'armor', defense: 3, color: this.colors.weapon, weight: 7 },
             { name: 'Gold Coin', symbol: '*', type: 'gold', value: 25, color: this.colors.item, weight: 15 }
         );
         
@@ -907,11 +958,21 @@ class Game {
                 const y = this.random(room.y + 1, room.y + room.height - 1);
                 
                 if (this.dungeon[y][x] === '.') {
-                    this.items.push({
+                    const newItem = {
                         ...itemType,
                         x, y,
                         id: this.nextItemId++ // グローバルカウンターでユニークID生成
-                    });
+                    };
+                    
+                    // 投擲武器や矢の場合、複数個生成
+                    if (itemType.count) {
+                        newItem.count = itemType.count + this.random(-2, 3); // ±2のランダム変動
+                        newItem.count = Math.max(1, newItem.count); // 最低1個は保証
+                    } else {
+                        newItem.count = 1;
+                    }
+                    
+                    this.items.push(newItem);
                 }
             }
         });
@@ -935,7 +996,13 @@ class Game {
                 };
                 this.player.inventory.push(inventoryItem);
                 this.audioManager.playSound('itemPickup');
-                this.addMessage(`You picked up ${item.name}!`, 'item');
+                
+                // 個数に応じたメッセージ表示
+                if (item.count && item.count > 1) {
+                    this.addMessage(`You picked up ${item.count} ${item.name}s!`, 'item');
+                } else {
+                    this.addMessage(`You picked up ${item.name}!`, 'item');
+                }
             }
             
             this.items = this.items.filter(i => i.id !== item.id);
@@ -964,7 +1031,13 @@ class Game {
                 };
                 this.player.inventory.push(inventoryItem);
                 this.audioManager.playSound('itemPickup');
-                this.addMessage(`You picked up ${item.name}!`, 'item');
+                
+                // 個数に応じたメッセージ表示
+                if (item.count && item.count > 1) {
+                    this.addMessage(`You picked up ${item.count} ${item.name}s!`, 'item');
+                } else {
+                    this.addMessage(`You picked up ${item.name}!`, 'item');
+                }
             }
             
             this.items = this.items.filter(i => i.id !== item.id);
@@ -1014,10 +1087,17 @@ class Game {
             const keyNumber = index + 1;
             let description = `${keyNumber}: ${item.symbol} ${item.name}`;
             
+            // 個数表示（1個以外の場合）
+            if (item.count && item.count > 1) {
+                description += ` (x${item.count})`;
+            }
+            
             if (item.type === 'potion') {
                 description += ` (${item.effect === 'heal' ? 'HP' : 'MP'} +${item.value})`;
             } else if (item.type === 'weapon') {
                 description += ` (Attack +${item.attack})`;
+                if (item.range) description += ` Range:${item.range}`;
+                if (item.missile) description += ` [Throwable]`;
             } else if (item.type === 'armor') {
                 description += ` (Defense +${item.defense})`;
             } else if (item.type === 'ring') {
@@ -1508,10 +1588,17 @@ class Game {
                 const keyNumber = index + 1;
                 let description = `${keyNumber}: ${item.symbol} ${item.name}`;
                 
+                // 個数表示（1個以外の場合）
+                if (item.count && item.count > 1) {
+                    description += ` (x${item.count})`;
+                }
+                
                 if (item.type === 'potion') {
                     description += ` (${item.effect === 'heal' ? 'HP' : 'MP'} +${item.value})`;
                 } else if (item.type === 'weapon') {
                     description += ` (Attack +${item.attack})`;
+                    if (item.range) description += ` Range:${item.range}`;
+                    if (item.missile) description += ` [Throwable]`;
                 } else if (item.type === 'armor') {
                     description += ` (Defense +${item.defense})`;
                 } else if (item.type === 'ring') {
@@ -1694,7 +1781,7 @@ class Game {
             font-weight: bold;
             font-size: 14px;
         `;
-        name.textContent = `${index + 1}. ${item.name}${isEquipped ? ' [EQUIPPED]' : ''}`;
+        name.textContent = `${index + 1}. ${item.name}${item.count && item.count > 1 ? ` (x${item.count})` : ''}${isEquipped ? ' [EQUIPPED]' : ''}`;
         
         const description = document.createElement('div');
         description.style.cssText = `
@@ -1708,6 +1795,15 @@ class Game {
             descText = `${item.effect === 'heal' ? 'HP' : 'MP'} Recovery +${item.value}`;
         } else if (item.type === 'weapon') {
             descText = `Attack Power +${item.attack}`;
+            if (item.count && item.count > 1) {
+                descText += ` (x${item.count})`;
+            }
+            if (item.range) {
+                descText += ` Range:${item.range}`;
+            }
+            if (item.missile) {
+                descText += ` [Throwable]`;
+            }
         } else if (item.type === 'armor') {
             descText = `Defense Power +${item.defense}`;
         } else if (item.type === 'ring') {
@@ -2210,7 +2306,11 @@ class Game {
         this.player.inventory.forEach((item, index) => {
             const div = document.createElement('div');
             const keyNumber = index + 1;
-            div.textContent = `${keyNumber}: ${item.symbol} ${item.name}`;
+            let displayName = `${keyNumber}: ${item.symbol} ${item.name}`;
+            if (item.count && item.count > 1) {
+                displayName += ` (x${item.count})`;
+            }
+            div.textContent = displayName;
             inventoryDiv.appendChild(div);
         });
         
