@@ -39,6 +39,7 @@ class Game {
             potion: '#9b59b6',            // 紫のポーション
             weapon: '#e67e22',            // オレンジの武器
             armor: '#3498db',             // 青の防具
+            ring: '#f39c12',              // 金色の指輪
             gold: '#f1c40f',              // 金色のゴールド
             stairs: '#ecf0f1',            // ライトグレーの階段
             text: '#ecf0f1',              // メインテキスト色
@@ -731,7 +732,9 @@ class Game {
             inventory: [],
             equipment: {     // 装備スロット
                 weapon: null,
-                armor: null
+                armor: null,
+                leftRing: null,   // 左手の指輪
+                rightRing: null   // 右手の指輪
             },
             // ステータス効果システム
             statusEffects: {
@@ -818,6 +821,24 @@ class Game {
             { name: 'protect armor', effect: 'protect_armor', weight: 2 }
         ];
 
+        // オリジナル Rogue 5.4.4 準拠の指輪定義
+        const ringTypes = [
+            { name: 'protection', effect: 'ring_protection', power: 1, weight: 9 },
+            { name: 'add strength', effect: 'ring_add_strength', power: 1, weight: 9 },
+            { name: 'sustain strength', effect: 'ring_sustain_strength', power: 0, weight: 5 },
+            { name: 'searching', effect: 'ring_searching', power: 0, weight: 10 },
+            { name: 'see invisible', effect: 'ring_see_invisible', power: 0, weight: 10 },
+            { name: 'adornment', effect: 'ring_adornment', power: 0, weight: 1 },
+            { name: 'aggravate monster', effect: 'ring_aggravate_monster', power: 0, weight: 10 },
+            { name: 'dexterity', effect: 'ring_dexterity', power: 1, weight: 8 },
+            { name: 'increase damage', effect: 'ring_increase_damage', power: 1, weight: 8 },
+            { name: 'regeneration', effect: 'ring_regeneration', power: 0, weight: 4 },
+            { name: 'slow digestion', effect: 'ring_slow_digestion', power: 0, weight: 9 },
+            { name: 'teleportation', effect: 'ring_teleportation', power: 0, weight: 5 },
+            { name: 'stealth', effect: 'ring_stealth', power: 0, weight: 7 },
+            { name: 'maintain armor', effect: 'ring_maintain_armor', power: 0, weight: 5 }
+        ];
+
         const itemTypes = [];
         
         // ポーション追加
@@ -841,6 +862,19 @@ class Game {
                 effect: scroll.effect,
                 color: this.colors.item,
                 weight: scroll.weight
+            });
+        });
+
+        // 指輪追加
+        ringTypes.forEach(ring => {
+            itemTypes.push({
+                name: `Ring of ${ring.name}`,
+                symbol: '=',
+                type: 'ring',
+                effect: ring.effect,
+                power: ring.power,
+                color: this.colors.ring,
+                weight: ring.weight
             });
         });
 
@@ -986,6 +1020,22 @@ class Game {
                 description += ` (Attack +${item.attack})`;
             } else if (item.type === 'armor') {
                 description += ` (Defense +${item.defense})`;
+            } else if (item.type === 'ring') {
+                // 指輪の効果説明
+                switch(item.effect) {
+                    case 'ring_protection':
+                        description += ` (Defense +${item.power || 1})`;
+                        break;
+                    case 'ring_add_strength':
+                        description += ` (Attack +${item.power || 1})`;
+                        break;
+                    case 'ring_increase_damage':
+                        description += ` (Damage +${item.power || 1})`;
+                        break;
+                    default:
+                        description += ` (Magical ring)`;
+                        break;
+                }
             }
             
             this.addMessage(description, 'item');
@@ -1034,7 +1084,7 @@ class Game {
             this.removeItemFromInventory(item.id);
             this.processTurn();
             
-        } else if (item.type === 'weapon' || item.type === 'armor') {
+        } else if (item.type === 'weapon' || item.type === 'armor' || item.type === 'ring') {
             // 装備アイテムの場合は equipItem メソッドに処理を委任
             // equipItem 内でインベントリからの削除も処理される
             this.equipItem(item);
@@ -1464,6 +1514,22 @@ class Game {
                     description += ` (Attack +${item.attack})`;
                 } else if (item.type === 'armor') {
                     description += ` (Defense +${item.defense})`;
+                } else if (item.type === 'ring') {
+                    // 指輪の効果説明
+                    switch(item.effect) {
+                        case 'ring_protection':
+                            description += ` (Defense +${item.power || 1})`;
+                            break;
+                        case 'ring_add_strength':
+                            description += ` (Attack +${item.power || 1})`;
+                            break;
+                        case 'ring_increase_damage':
+                            description += ` (Damage +${item.power || 1})`;
+                            break;
+                        default:
+                            description += ` (Magical ring)`;
+                            break;
+                    }
                 }
                 
                 this.addMessage(description, 'item');
@@ -1582,7 +1648,9 @@ class Game {
         
         // 装備中のアイテムかチェック
         const isEquipped = (this.player.equipment.weapon && this.player.equipment.weapon.name === item.name) ||
-                          (this.player.equipment.armor && this.player.equipment.armor.name === item.name);
+                          (this.player.equipment.armor && this.player.equipment.armor.name === item.name) ||
+                          (this.player.equipment.leftRing && this.player.equipment.leftRing.name === item.name) ||
+                          (this.player.equipment.rightRing && this.player.equipment.rightRing.name === item.name);
         
         itemDiv.style.cssText = `
             display: flex;
@@ -1642,6 +1710,31 @@ class Game {
             descText = `Attack Power +${item.attack}`;
         } else if (item.type === 'armor') {
             descText = `Defense Power +${item.defense}`;
+        } else if (item.type === 'ring') {
+            // 指輪の効果説明
+            switch(item.effect) {
+                case 'ring_protection':
+                    descText = `Defense +${item.power || 1}`;
+                    break;
+                case 'ring_add_strength':
+                    descText = `Attack +${item.power || 1}`;
+                    break;
+                case 'ring_increase_damage':
+                    descText = `Damage +${item.power || 1}`;
+                    break;
+                case 'ring_sustain_strength':
+                    descText = 'Prevents strength loss';
+                    break;
+                case 'ring_searching':
+                    descText = 'Improves search ability';
+                    break;
+                case 'ring_see_invisible':
+                    descText = 'See invisible creatures';
+                    break;
+                default:
+                    descText = 'Magical ring';
+                    break;
+            }
         }
         description.textContent = descText;
         
@@ -1680,10 +1773,22 @@ class Game {
             }
             actions.appendChild(useBtn);
             
-        } else if (item.type === 'weapon' || item.type === 'armor') {
+        } else if (item.type === 'weapon' || item.type === 'armor' || item.type === 'ring') {
             if (isEquipped) {
+                let slotToUnequip = '';
+                if (item.type === 'weapon') slotToUnequip = 'weapon';
+                else if (item.type === 'armor') slotToUnequip = 'armor';
+                else if (item.type === 'ring') {
+                    // 指輪の場合、どちらの手にあるかチェック
+                    if (this.player.equipment.leftRing && this.player.equipment.leftRing.name === item.name) {
+                        slotToUnequip = 'leftRing';
+                    } else if (this.player.equipment.rightRing && this.player.equipment.rightRing.name === item.name) {
+                        slotToUnequip = 'rightRing';
+                    }
+                }
+                
                 const unequipBtn = this.createActionButton('Unequip', '#666666', () => {
-                    this.unequipItem(item.type === 'weapon' ? 'weapon' : 'armor');
+                    this.unequipItem(slotToUnequip);
                     this.updateInventoryUI();
                 });
                 actions.appendChild(unequipBtn);
@@ -1711,7 +1816,7 @@ class Game {
             if (e.target.tagName !== 'BUTTON') {
                 if (item.type === 'potion') {
                     this.useItemByIndex(index);
-                } else if ((item.type === 'weapon' || item.type === 'armor') && !isEquipped) {
+                } else if ((item.type === 'weapon' || item.type === 'armor' || item.type === 'ring') && !isEquipped) {
                     this.equipItem(item);
                 }
                 this.updateInventoryUI();
@@ -1771,7 +1876,7 @@ class Game {
                 const item = this.player.inventory[index];
                 if (item.type === 'potion') {
                     this.useItemByIndex(index);
-                } else if (item.type === 'weapon' || item.type === 'armor') {
+                } else if (item.type === 'weapon' || item.type === 'armor' || item.type === 'ring') {
                     this.equipItem(item);
                 }
                 this.updateInventoryUI();
@@ -1858,6 +1963,57 @@ class Game {
             this.player.equipment.armor = item;
             this.audioManager.playSound('equip');
             this.addMessage(`You equip ${item.name}! Defense +${item.defense}`, 'item');
+            
+        } else if (item.type === 'ring') {
+            // 同じ指輪を再装備しようとしている場合はスキップ
+            if ((this.player.equipment.leftRing && this.player.equipment.leftRing.id === item.id) ||
+                (this.player.equipment.rightRing && this.player.equipment.rightRing.id === item.id)) {
+                this.addMessage(`${item.name} is already equipped.`, 'system');
+                return;
+            }
+            
+            // 左手に指輪を優先装備
+            if (!this.player.equipment.leftRing) {
+                // まず、インベントリから装備するアイテムを削除
+                if (!this.removeItemFromInventory(item.id)) {
+                    this.addMessage("Failed to equip ring - item not found in inventory.", 'system');
+                    return;
+                }
+                
+                this.player.equipment.leftRing = item;
+                this.audioManager.playSound('equip');
+                this.addMessage(`You put on ${item.name} on your left hand.`, 'item');
+                
+            } else if (!this.player.equipment.rightRing) {
+                // 右手に装備
+                if (!this.removeItemFromInventory(item.id)) {
+                    this.addMessage("Failed to equip ring - item not found in inventory.", 'system');
+                    return;
+                }
+                
+                this.player.equipment.rightRing = item;
+                this.audioManager.playSound('equip');
+                this.addMessage(`You put on ${item.name} on your right hand.`, 'item');
+                
+            } else {
+                // 両手が塞がっている場合、左手の指輪を外して新しい指輪を装備
+                const unequippedRing = {
+                    ...this.player.equipment.leftRing,
+                    id: this.nextItemId++
+                };
+                this.player.inventory.push(unequippedRing);
+                this.addMessage(`You remove ${this.player.equipment.leftRing.name} from your left hand.`, 'item');
+                
+                // インベントリから新しい指輪を削除
+                if (!this.removeItemFromInventory(item.id)) {
+                    this.addMessage("Failed to equip ring - item not found in inventory.", 'system');
+                    return;
+                }
+                
+                this.player.equipment.leftRing = item;
+                this.audioManager.playSound('equip');
+                this.addMessage(`You put on ${item.name} on your left hand.`, 'item');
+            }
         }
         
         // ステータスを再計算
@@ -1875,7 +2031,14 @@ class Game {
             };
             this.player.inventory.push(inventoryItem);
             this.player.equipment[slot] = null;
-            this.addMessage(`You unequip ${item.name}.`, 'item');
+            
+            if (slot === 'leftRing' || slot === 'rightRing') {
+                const handName = slot === 'leftRing' ? 'left' : 'right';
+                this.addMessage(`You remove ${item.name} from your ${handName} hand.`, 'item');
+            } else {
+                this.addMessage(`You unequip ${item.name}.`, 'item');
+            }
+            
             this.updatePlayerStats();
         }
     }
@@ -1893,6 +2056,18 @@ class Game {
         } else {
             this.addMessage("Armor: None", 'system');
         }
+        
+        if (this.player.equipment.leftRing) {
+            this.addMessage(`Left Ring: ${this.player.equipment.leftRing.symbol} ${this.player.equipment.leftRing.name}`, 'item');
+        } else {
+            this.addMessage("Left Ring: None", 'system');
+        }
+        
+        if (this.player.equipment.rightRing) {
+            this.addMessage(`Right Ring: ${this.player.equipment.rightRing.symbol} ${this.player.equipment.rightRing.name}`, 'item');
+        } else {
+            this.addMessage("Right Ring: None", 'system');
+        }
     }
     
     removeEquipment() {
@@ -1902,6 +2077,12 @@ class Game {
             this.processTurn();
         } else if (this.player.equipment.armor) {
             this.unequipItem('armor');
+            this.processTurn();
+        } else if (this.player.equipment.leftRing) {
+            this.unequipItem('leftRing');
+            this.processTurn();
+        } else if (this.player.equipment.rightRing) {
+            this.unequipItem('rightRing');
             this.processTurn();
         } else {
             this.addMessage("You have no equipment to remove.", 'system');
@@ -1920,6 +2101,63 @@ class Game {
         if (this.player.equipment.armor) {
             this.player.defense += this.player.equipment.armor.defense || 0;
         }
+        
+        // 指輪効果を適用
+        this.applyRingEffects();
+    }
+    
+    // 指輪効果適用システム
+    applyRingEffects() {
+        const rings = [this.player.equipment.leftRing, this.player.equipment.rightRing].filter(ring => ring);
+        
+        rings.forEach(ring => {
+            const power = ring.power || 1;
+            
+            switch(ring.effect) {
+                case 'ring_protection':
+                    this.player.defense += power;
+                    break;
+                case 'ring_add_strength':
+                    this.player.attack += power;
+                    break;
+                case 'ring_increase_damage':
+                    this.player.attack += power;
+                    break;
+                case 'ring_dexterity':
+                    // 命中率向上効果（将来の実装用）
+                    break;
+                case 'ring_regeneration':
+                    // HP自動回復効果（将来の実装用）
+                    break;
+                case 'ring_sustain_strength':
+                    // 筋力低下防止効果（将来の実装用）
+                    break;
+                case 'ring_searching':
+                    // 探索能力向上効果（将来の実装用）
+                    break;
+                case 'ring_see_invisible':
+                    // 透明な敵の視認効果（将来の実装用）
+                    break;
+                case 'ring_stealth':
+                    // ステルス効果（将来の実装用）
+                    break;
+                case 'ring_teleportation':
+                    // ランダムテレポート効果（将来の実装用）
+                    break;
+                case 'ring_slow_digestion':
+                    // 空腹度減少緩和効果（将来の実装用）
+                    break;
+                case 'ring_maintain_armor':
+                    // 防具劣化防止効果（将来の実装用）
+                    break;
+                case 'ring_aggravate_monster':
+                    // モンスター強化効果（呪いの指輪）
+                    break;
+                case 'ring_adornment':
+                    // 装飾指輪（効果なし）
+                    break;
+            }
+        });
     }
     
     addMessage(text, type = 'system') {
