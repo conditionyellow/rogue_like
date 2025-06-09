@@ -719,7 +719,7 @@ class Game {
             baseDefense: 5,  // 基本防御力
             attack: 10,      // 計算後攻撃力
             defense: 5,      // 計算後防御力
-            level: 1,
+            level: this.floor, // レベルは現在の階層と等しい
             experience: 0,
             experienceToNext: 100,
             gold: 0,
@@ -1203,8 +1203,7 @@ class Game {
                 break;
                 
             case 'raise_level':
-                this.player.level++;
-                this.player.experienceToNext = Math.floor(this.player.experienceToNext * 1.5);
+                // 経験値による強化（レベルアップではない）
                 const hpIncrease = this.random(8, 15);
                 const mpIncrease = this.random(3, 8);
                 this.player.maxHp += hpIncrease;
@@ -1213,8 +1212,10 @@ class Game {
                 this.player.mp += mpIncrease;
                 this.player.baseAttack += this.random(1, 3);
                 this.player.baseDefense += this.random(1, 2);
+                // レベルは階層に基づくので更新しない
+                this.player.level = this.floor;
                 this.updatePlayerStats();
-                this.addMessage("You feel more experienced! You gained a level!", 'system');
+                this.addMessage("You feel more experienced! Your abilities have improved!", 'system');
                 break;
                 
             case 'haste_self':
@@ -1516,11 +1517,11 @@ class Game {
     checkLevelUp() {
         console.log(`DEBUG: checkLevelUp called - Current exp: ${this.player.experience}, Needed: ${this.player.experienceToNext}`);
         if (this.player.experience >= this.player.experienceToNext) {
-            this.player.level++;
+            // 経験値によるステータス向上
             this.player.experience -= this.player.experienceToNext;
             this.player.experienceToNext = Math.floor(this.player.experienceToNext * 1.5);
             
-            // Level up bonuses
+            // ステータス向上ボーナス
             const hpIncrease = this.random(8, 15);
             const mpIncrease = this.random(3, 8);
             const attackIncrease = this.random(1, 3);
@@ -1533,19 +1534,23 @@ class Game {
             this.player.baseAttack += attackIncrease;  // 基本ステータスを更新
             this.player.baseDefense += defenseIncrease; // 基本ステータスを更新
             
+            // レベルは階層に基づく
+            this.player.level = this.floor;
+            
             // 装備込みステータスを再計算
             this.updatePlayerStats();
             
             // Play level up sound
             this.audioManager.playSound('levelUp');
             
-            this.addMessage(`Level up! You are now level ${this.player.level}!`, 'system');
+            this.addMessage(`You feel more experienced!`, 'system');
             this.addMessage(`HP +${hpIncrease}, MP +${mpIncrease}, Attack +${attackIncrease}, Defense +${defenseIncrease}`, 'system');
         }
     }
     
     descendStairs() {
         this.floor++; // 階層を増やす
+        this.player.level = this.floor; // プレイヤーのレベルも階層に合わせて更新
         this.audioManager.playSound('stairs');
         this.addMessage(`You descend deeper into the dungeon... (Floor ${this.floor})`, 'system');
         this.generateDungeon();
@@ -2511,7 +2516,7 @@ class Game {
     
     updateUI() {
         // Update player stats
-        document.getElementById('playerLevel').textContent = this.player.level;
+        document.getElementById('playerEXP').textContent = this.player.experience;
         document.getElementById('playerHP').textContent = this.player.hp;
         document.getElementById('playerMaxHP').textContent = this.player.maxHp;
         document.getElementById('playerMP').textContent = this.player.mp;
@@ -2982,7 +2987,7 @@ ${customTombstone}
             
             <div style="color: #bdc3c7; margin-bottom: ${isSmallScreen ? '10px' : '15px'}; text-align: left; display: inline-block; font-size: ${statsSize};">
                 <strong>📊 Statistics:</strong><br>
-                Level: ${this.player.level} • Floor: ${this.floor} • Turns: ${this.turn}<br>
+                Floor: ${this.floor} • Turns: ${this.turn}<br>
                 Gold: ${this.player.gold} • EXP: ${this.player.experience}<br>
                 Monsters Defeated: ${stats.monstersKilled} • Items: ${stats.itemsFound}<br>
                 <br>
@@ -3027,8 +3032,7 @@ ${customTombstone}
         let score = 0;
         score += this.player.gold * 1; // ゴールド
         score += this.player.experience * 2; // 経験値
-        score += (this.player.level - 1) * 100; // レベル
-        score += this.floor * 50; // 到達階層
+        score += this.floor * 100; // 到達階層（レベルの代わり）
         score += this.turn * 1; // 生存ターン数
         
         // 装備品ボーナス
