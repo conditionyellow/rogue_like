@@ -19,8 +19,16 @@ class Game {
         this.floor = 1; // 現在の階層
         this.gameState = 'playing'; // playing, inventory, item_selection, dead
         this.itemSelectionMode = false;
+        this.magicSelectionMode = false; // 魔法選択モード
         this.inventoryUIActive = false; // 専用インベントリUI表示フラグ
         this.nextItemId = 0; // グローバルアイテムIDカウンター
+        this.projectiles = []; // 魔法の弾などを管理
+
+        // ゲーム内の全魔法を定義
+        this.spells = {
+            'fireball': { name: 'Fireball', cost: 10, damage: 15, range: 6, type: 'projectile' },
+            'heal': { name: 'Heal', cost: 8, heal: 25, type: 'self' }
+        };
         
         // Initialize audio system
         this.audioManager = new AudioManager();
@@ -113,6 +121,12 @@ class Game {
             this.handleItemSelection(e);
             return;
         }
+
+        // 魔法選択モードの処理
+        if (this.magicSelectionMode) {
+            this.handleMagicSelection(e);
+            return;
+        }
         
         let moved = false;
         let dx = 0, dy = 0;
@@ -151,6 +165,9 @@ class Game {
                 break;
             case 'i':
                 this.showInventoryUI();
+                break;
+            case 'm':
+                this.startMagicSelection();
                 break;
             case 'e':
                 this.showEquipment();
@@ -356,6 +373,9 @@ class Game {
     }
     
     processTurn() {
+        // Update projectiles before enemies move
+        this.updateProjectiles();
+
         // Process player status effects first
         this.processPlayerStatusEffects();
         
@@ -648,6 +668,7 @@ class Game {
             experienceToNext: 100,
             gold: 0,
             inventory: [],
+            spells: ['heal', 'fireball'], // 習得済みの魔法
             equipment: {     // 装備スロット
                 weapon: null,
                 armor: null
@@ -854,6 +875,122 @@ class Game {
             
         } else {
             this.addMessage("You can't use that item.", 'system');
+        }
+    }
+
+    // ===== 魔法システム =====
+    startMagicSelection() {
+        if (this.player.spells.length === 0) {
+            this.addMessage("You don't know any spells.", 'system');
+            return;
+        }
+
+        this.magicSelectionMode = true;
+        this.addMessage("=== CAST A SPELL ===", 'system');
+
+        this.player.spells.forEach((spellId, index) => {
+            const spell = this.spells[spellId];
+            if (spell) {
+                const keyNumber = index + 1;
+                this.addMessage(`${keyNumber}: ${spell.name} (Cost: ${spell.cost} MP)`, 'item');
+            }
+        });
+
+        this.addMessage("Press 1-9 to choose a spell, or ESC to cancel.", 'system');
+    }
+
+    handleMagicSelection(e) {
+        const key = e.key.toLowerCase();
+
+        if (key === 'escape') {
+            this.magicSelectionMode = false;
+            this.addMessage("Spell selection cancelled.", 'system');
+            e.preventDefault();
+            return;
+        }
+
+        if (key >= '1' && key <= '9') {
+            const index = parseInt(key) - 1;
+            if (index < this.player.spells.length) {
+                const spellId = this.player.spells[index];
+                this.castSpell(spellId);
+            } else {
+                this.addMessage("Invalid spell number.", 'system');
+            }
+            this.magicSelectionMode = false;
+        }
+        e.preventDefault();
+    }
+
+    castSpell(spellId, options = {}) {
+        const spell = this.spells[spellId];
+        if (!spell) {
+            this.addMessage("Unknown spell.", 'system');
+            return;
+        }
+
+        if (this.player.mp < spell.cost) {
+            this.addMessage("You don't have enough mana.", 'system');
+            return;
+        }
+
+        this.player.mp -= spell.cost;
+        this.audioManager.playSound('magic');
+
+        switch (spell.type) {
+            case 'self':
+                if (spellId === 'heal') {
+                    const healedAmount = Math.min(this.player.maxHp - this.player.hp, spell.heal);
+                    this.player.hp += healedAmount;
+                    this.addMessage(`You cast ${spell.name} and recover ${healedAmount} HP.`, 'item');
+                }
+                this.processTurn();
+                break;
+
+            case 'projectile':
+                if (spellId === 'fireball') {
+                    this.addMessage("Choose a direction for the fireball (WASD/Arrows).", 'system');
+                    this.gameState = 'targeting';
+                    
+                    const targetListener = (e) => {
+                        const direction = this.getDirectionFromKey(e.key);
+                        if (direction) {
+                            document.removeEventListener('keydown', targetListener);
+                            this.gameState = 'playing';
+                            
+                            this.projectiles.push({
+                                x: this.player.x,
+                                y: this.player.y,
+                                dx: direction.dx,
+                                dy: direction.dy,
+                                range: spell.range,
+                                damage: spell.damage,
+                                symbol: '*',
+                                color: '#ff6347' // Tomato
+                            });
+                            this.addMessage(`You cast ${spell.name}!`, 'combat');
+                            this.processTurn();
+                        } else if (e.key === 'Escape') {
+                            document.removeEventListener('keydown', targetListener);
+                            this.gameState = 'playing';
+                            this.player.mp += spell.cost; // Refund MP
+                            this.addMessage("Targeting cancelled.", 'system');
+                        }
+                        e.preventDefault();
+                    };
+                    document.addEventListener('keydown', targetListener);
+                }
+                break;
+        }
+    }
+
+    getDirectionFromKey(key) {
+        switch(key.toLowerCase()) {
+            case 'w': case 'arrowup': return { dx: 0, dy: -1 };
+            case 's': case 'arrowdown': return { dx: 0, dy: 1 };
+            case 'a': case 'arrowleft': return { dx: -1, dy: 0 };
+            case 'd': case 'arrowright': return { dx: 1, dy: 0 };
+            default: return null;
         }
     }
     
@@ -1513,11 +1650,63 @@ class Game {
                 }
             }
         });
+
+        // Render projectiles
+        this.renderProjectiles(cameraX, cameraY);
         
         // Render player
         const playerScreenX = this.player.x - cameraX;
         const playerScreenY = this.player.y - cameraY;
         this.renderEntity(playerScreenX, playerScreenY, this.player.symbol, this.player.color);
+    }
+
+    updateProjectiles() {
+        for (let i = this.projectiles.length - 1; i >= 0; i--) {
+            const proj = this.projectiles[i];
+            proj.x += proj.dx;
+            proj.y += proj.dy;
+            proj.range--;
+
+            // Check for wall collision
+            if (!this.isValidMove(proj.x, proj.y)) {
+                this.projectiles.splice(i, 1);
+                this.addMessage("The fireball fizzles out against the wall.", 'system');
+                continue;
+            }
+
+            // Check for enemy collision
+            const enemy = this.getEnemyAt(proj.x, proj.y);
+            if (enemy) {
+                const damage = proj.damage;
+                enemy.hp -= damage;
+                this.addMessage(`The fireball hits ${enemy.name} for ${damage} damage!`, 'combat');
+                if (enemy.hp <= 0) {
+                    enemy.alive = false;
+                    this.addMessage(`${enemy.name} is vanquished by the flames!`, 'combat');
+                    this.player.experience += enemy.experience;
+                    this.player.gold += enemy.gold;
+                    this.checkLevelUp();
+                }
+                this.projectiles.splice(i, 1);
+                continue;
+            }
+
+            // Check for range expiration
+            if (proj.range <= 0) {
+                this.projectiles.splice(i, 1);
+            }
+        }
+    }
+
+    renderProjectiles(cameraX, cameraY) {
+        this.projectiles.forEach(proj => {
+            const screenX = proj.x - cameraX;
+            const screenY = proj.y - cameraY;
+
+            if (screenX >= 0 && screenX < this.viewWidth && screenY >= 0 && screenY < this.viewHeight) {
+                this.renderEntity(screenX, screenY, proj.symbol, proj.color);
+            }
+        });
     }
      renderTile(x, y, tile) {
         const pixelX = x * this.tileSize;
