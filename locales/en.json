@@ -177,18 +177,4 @@
     "monster_name_yeti": "Yeti",
     "monster_name_dragon": "Dragon",
     "monster_name_jabberwock": "Jabberwock"
-},
-    "item_name_health_potion": "Health Potion",
-    "item_name_mana_potion": "Mana Potion",
-    "item_name_super_health_potion": "Super Health Potion",
-    "item_name_super_mana_potion": "Super Mana Potion",
-    "item_name_dagger": "Dagger",
-    "item_name_short_sword": "Short Sword",
-    "item_name_long_sword": "Long Sword",
-    "item_name_axe": "Axe",
-    "item_name_mace": "Mace",
-    "item_name_leather_armor": "Leather Armor",
-    "item_name_chain_mail": "Chain Mail",
-    "item_name_plate_mail": "Plate Mail",
-    "item_name_gold_coin": "Gold Coin"
 }

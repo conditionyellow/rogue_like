@@ -4,7 +4,7 @@ import { monsterTemplates } from './monsters.js';
 // ===== ROGUE GAME ENGINE =====
 // A full-featured roguelike game implementation
 
-class Game {
+export class Game {
     constructor() {
         this.canvas = document.getElementById('gameCanvas');
         this.ctx = this.canvas.getContext('2d');
@@ -61,11 +61,9 @@ class Game {
             textSecondary: '#bdc3c7',     // セカンダリテキスト色
             ui: '#34495e'                 // UI要素色
         };
-        
-        this.init();
     }
     
-    init() {
+    async init() {
         this.setupEventListeners();
         this.generateDungeon();
         this.createPlayer();

@@ -263,10 +263,16 @@
     <script type="module" src="monsters.js"></script>
     <script src="localization.js"></script>
     <script src="audio.js"></script>
-    <script src="game.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            loc.init();
+    <script type="module" src="game.js"></script>
+    <script type="module">
+        import { Game } from './game.js';
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loc.init(); // 翻訳の初期読み込みを待つ
+            const game = new Game();
+            loc.setGame(game); // locにgameインスタンスを渡す
+            await game.init(); // gameの初期化を待つ
+
             // Language switcher events
             document.getElementById('lang-en').addEventListener('click', () => loc.setLanguage('en'));
             document.getElementById('lang-ja').addEventListener('click', () => loc.setLanguage('ja'));

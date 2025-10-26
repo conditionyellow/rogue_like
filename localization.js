@@ -2,6 +2,11 @@ class LocalizationManager {
     constructor() {
         this.translations = {};
         this.currentLang = localStorage.getItem('rogue_lang') || 'en'; // Default to English
+        this.game = null;
+    }
+
+    setGame(gameInstance) {
+        this.game = gameInstance;
     }
 
     async init() {
@@ -31,6 +36,12 @@ class LocalizationManager {
     async setLanguage(lang) {
         await this.loadLanguage(lang);
         this.updateUI();
+        
+        // ゲームの再描画をトリガー
+        if (this.game) {
+            this.game.render();
+            this.game.updateUI();
+        }
     }
 
     t(key, replacements = {}) {

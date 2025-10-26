@@ -177,18 +177,4 @@
     "monster_name_yeti": "イエティ",
     "monster_name_dragon": "ドラゴン",
     "monster_name_jabberwock": "ジャバウォック"
-},
-    "item_name_health_potion": "回復薬",
-    "item_name_mana_potion": "魔力薬",
-    "item_name_super_health_potion": "高級回復薬",
-    "item_name_super_mana_potion": "高級魔力薬",
-    "item_name_dagger": "短剣",
-    "item_name_short_sword": "ショートソード",
-    "item_name_long_sword": "ロングソード",
-    "item_name_axe": "斧",
-    "item_name_mace": "メイス",
-    "item_name_leather_armor": "革の鎧",
-    "item_name_chain_mail": "鎖帷子",
-    "item_name_plate_mail": "プレートメイル",
-    "item_name_gold_coin": "金貨"
 }
