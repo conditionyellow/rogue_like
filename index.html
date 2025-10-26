@@ -100,10 +100,10 @@
         .health-bar { background-color: #e74c3c; height: 100%; transition: width 0.3s; }
         .mana-bar { background-color: #3498db; height: 100%; transition: width 0.3s; }
 
-        #inventory {
+        #guide-panel .guide-list {
             flex: 1;
             overflow-y: auto;
-            font-size: 12px;
+            font-size: 10px;
         }
 
         #messages {
@@ -259,6 +259,8 @@
 
     </div>
     
+    <script type="module" src="items.js"></script>
+    <script type="module" src="monsters.js"></script>
     <script src="localization.js"></script>
     <script src="audio.js"></script>
     <script src="game.js"></script>

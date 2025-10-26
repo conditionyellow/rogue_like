@@ -1,3 +1,6 @@
+import { itemTemplates } from './items.js';
+import { monsterTemplates } from './monsters.js';
+
 // ===== ROGUE GAME ENGINE =====
 // A full-featured roguelike game implementation
 
@@ -299,8 +302,17 @@ class Game {
         // 罠のチェック
         const trap = this.getTrapAt(newX, newY);
         if (trap) {
+            const originalPlayerX = this.player.x;
+            const originalPlayerY = this.player.y;
+
             this.triggerTrap(trap);
             if (this.gameState === 'dead') return; // 罠で死んだら即終了
+
+            // If player was teleported by the trap, skip normal movement
+            if (this.player.x !== originalPlayerX || this.player.y !== originalPlayerY) {
+                this.processTurn(); // Process turn after teleport
+                return;
+            }
         }
         
         // Check for enemies
@@ -811,24 +823,23 @@ class Game {
     }
     
     spawnItems() {
-        const itemTypes = [
-            { name: 'Health Potion', symbol: '!', type: 'potion', effect: 'heal', value: 30, color: this.colors.potion },
-            { name: 'Mana Potion', symbol: '!', type: 'potion', effect: 'mana', value: 20, color: this.colors.potion },
-            { name: 'Sword', symbol: ')', type: 'weapon', attack: 5, color: this.colors.weapon },
-            { name: 'Shield', symbol: ']', type: 'armor', defense: 3, color: this.colors.weapon },
-            { name: 'Gold Coin', symbol: '*', type: 'gold', value: 25, color: this.colors.item }
-        ];
-        
+        // Filter out gold coins for random spawns, and filter by floor/rarity
+        const availableItemTemplates = itemTemplates.filter(template => 
+            template.type !== 'gold' && 
+            (template.rarity === undefined || (this.floor >= 1 && template.rarity === 'common') || (this.floor >= 5 && template.rarity === 'uncommon') || (this.floor >= 10 && template.rarity === 'rare'))
+        );
+
         // Spawn items randomly in rooms
         this.rooms.forEach(room => {
-            if (Math.random() < 0.6) { // 60% chance per room
-                const itemType = itemTypes[this.random(0, itemTypes.length)];
+            if (Math.random() < 0.6 && availableItemTemplates.length > 0) { // 60% chance per room
+                const template = availableItemTemplates[this.random(0, availableItemTemplates.length)];
                 const x = this.random(room.x + 1, room.x + room.width - 1);
                 const y = this.random(room.y + 1, room.y + room.height - 1);
                 
                 if (this.dungeon[y][x] === '.') {
                     this.items.push({
-                        ...itemType,
+                        ...template,
+                        name: loc.t(template.nameKey), // Localize name
                         x, y,
                         id: this.nextItemId++ // グローバルカウンターでユニークID生成
                     });
@@ -1605,28 +1616,29 @@ class Game {
 
     generateShopInventory() {
         this.shopInventory = [];
-        const itemTemplates = [
-            { name: 'Health Potion', symbol: '!', type: 'potion', effect: 'heal', value: 30, color: this.colors.potion, basePrice: 50 },
-            { name: 'Mana Potion', symbol: '!', type: 'potion', effect: 'mana', value: 20, color: this.colors.potion, basePrice: 40 },
-            { name: 'Sword', symbol: ')', type: 'weapon', attack: 5, color: this.colors.weapon, basePrice: 100 },
-            { name: 'Shield', symbol: ']', type: 'armor', defense: 3, color: this.colors.armor, basePrice: 80 },
-        ];
+        // Filter out gold coins and filter by floor/rarity for shop
+        const availableShopTemplates = itemTemplates.filter(template => 
+            template.type !== 'gold' && 
+            (template.rarity === undefined || (this.floor >= 1 && template.rarity === 'common') || (this.floor >= 5 && template.rarity === 'uncommon') || (this.floor >= 10 && template.rarity === 'rare'))
+        );
 
         const numItems = this.random(3, 6);
         for (let i = 0; i < numItems; i++) {
-            const template = itemTemplates[this.random(0, itemTemplates.length)];
+            if (availableShopTemplates.length === 0) break;
+            const template = availableShopTemplates[this.random(0, availableShopTemplates.length)];
             let item = { ...template, id: this.nextItemId++ };
 
             const floorBonus = Math.floor(this.floor / 4);
             if (item.type === 'weapon' && floorBonus > 0) {
                 item.attack += floorBonus * this.random(1, 3);
-                item.name = `+${floorBonus} ${item.name}`;
+                item.name = loc.t(item.nameKey, { bonus: floorBonus }); // Localize name with bonus
                 item.basePrice += floorBonus * 50;
-            }
-            if (item.type === 'armor' && floorBonus > 0) {
+            } else if (item.type === 'armor' && floorBonus > 0) {
                 item.defense += floorBonus * this.random(1, 2);
-                item.name = `+${floorBonus} ${item.name}`;
+                item.name = loc.t(item.nameKey, { bonus: floorBonus }); // Localize name with bonus
                 item.basePrice += floorBonus * 40;
+            } else {
+                item.name = loc.t(item.nameKey); // Localize name without bonus
             }
             
             this.shopInventory.push(item);
