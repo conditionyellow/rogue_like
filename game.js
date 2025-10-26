@@ -1942,16 +1942,6 @@ class Game {
         // Update mana bar
         const manaPercent = (this.player.mp / this.player.maxMp) * 100;
         document.getElementById('manaBar').style.width = manaPercent + '%';
-        
-        // Update inventory display
-        const inventoryDiv = document.getElementById('inventory');
-        inventoryDiv.innerHTML = '';
-        this.player.inventory.forEach((item, index) => {
-            const div = document.createElement('div');
-            const keyNumber = index + 1;
-            div.textContent = `${keyNumber}: ${item.symbol} ${item.name}`;
-            inventoryDiv.appendChild(div);
-        });
     }
      render() {
         // ダークモード背景に変更
