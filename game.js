@@ -21,8 +21,12 @@ class Game {
         this.itemSelectionMode = false;
         this.magicSelectionMode = false; // 魔法選択モード
         this.inventoryUIActive = false; // 専用インベントリUI表示フラグ
+        this.shopUIActive = false;      // ショップUI表示フラグ
         this.nextItemId = 0; // グローバルアイテムIDカウンター
         this.projectiles = []; // 魔法の弾などを管理
+        this.traps = []; // ダンジョン内の罠を管理
+        this.shopInventory = []; // ショップの商品リスト
+        this.shopRoom = null; // ショップ部屋の参照
 
         // ゲーム内の全魔法を定義
         this.spells = {
@@ -43,6 +47,7 @@ class Game {
             door: '#6a9bd1',              // ソフトブルーのドア/通路
             player: '#7dd87d',            // 明るい緑のプレイヤー
             enemy: '#e74c3c',             // 温かい赤の敵
+            merchant: '#f1c40f',          // 商人の色
             item: '#f39c12',              // 温かいオレンジのアイテム
             potion: '#9b59b6',            // 紫のポーション
             weapon: '#e67e22',            // オレンジの武器
@@ -63,6 +68,7 @@ class Game {
         this.createPlayer();
         this.spawnEnemies();
         this.spawnItems();
+        this.spawnTraps();
         this.addMessage(`Welcome to the dungeon! (Floor ${this.floor})`, 'system');
         this.addMessage("Find the stairs to descend deeper.", 'system');
         this.addMessage("Press any key to enable audio...", 'system');
@@ -113,6 +119,12 @@ class Game {
         // インベントリUI表示中の処理
         if (this.inventoryUIActive) {
             this.handleInventoryInput(e);
+            return;
+        }
+
+        // ショップUI表示中の処理
+        if (this.shopUIActive) {
+            this.handleShopInput(e);
             return;
         }
         
@@ -175,6 +187,9 @@ class Game {
             case 'r':
                 this.removeEquipment();
                 break;
+            case 'b':
+                this.interactWithMerchant();
+                break;
             // 🆕 セーブ/ロード機能
             case 'ctrl+s':
                 this.saveGame();
@@ -196,6 +211,48 @@ class Game {
         e.preventDefault();
     }
     
+    getTrapAt(x, y) {
+        return this.traps.find(trap => trap.x === x && trap.y === y);
+    }
+
+    triggerTrap(trap) {
+        if (trap.triggered) return;
+
+        trap.triggered = true;
+        trap.visible = true;
+        this.audioManager.playSound('magic');
+
+        switch (trap.type) {
+            case 'damage':
+                const damage = trap.damage;
+                this.player.hp -= damage;
+                this.addMessage(`You stepped on a ${trap.name} and took ${damage} damage!`, 'combat');
+                if (this.player.hp <= 0) {
+                    this.player.hp = 0;
+                    this.updateUI();
+                    this.gameOver(`a ${trap.name}`);
+                }
+                break;
+            case 'teleport':
+                this.addMessage(`You stepped on a ${trap.name}! You are whisked away!`, 'system');
+                const targetRoom = this.rooms[this.random(0, this.rooms.length)];
+                let newX, newY;
+                let attempts = 0;
+                do {
+                    newX = this.random(targetRoom.x, targetRoom.x + targetRoom.width);
+                    newY = this.random(targetRoom.y, targetRoom.y + targetRoom.height);
+                    attempts++;
+                } while (this.dungeon[newY][newX] !== '.' && attempts < 50);
+                
+                this.player.x = newX;
+                this.player.y = newY;
+                break;
+            case 'alarm':
+                this.addMessage(`You stepped on an ${trap.name}! It emits a loud alarm!`, 'system');
+                break;
+        }
+    }
+
     movePlayer(dx, dy) {
         // Check if player is paralyzed
         if (this.player.statusEffects && this.player.statusEffects.paralyzed && 
@@ -225,6 +282,13 @@ class Game {
         const newY = this.player.y + dy;
         
         if (!this.isValidMove(newX, newY)) return;
+
+        // 罠のチェック
+        const trap = this.getTrapAt(newX, newY);
+        if (trap) {
+            this.triggerTrap(trap);
+            if (this.gameState === 'dead') return; // 罠で死んだら即終了
+        }
         
         // Check for enemies
         const enemy = this.getEnemyAt(newX, newY);
@@ -576,6 +640,7 @@ class Game {
     }
     
     generateDungeon() {
+        this.shopRoom = null;
         // Initialize with walls
         this.dungeon = Array(this.mapHeight).fill().map(() => Array(this.mapWidth).fill('#'));
         
@@ -589,7 +654,7 @@ class Game {
             const x = this.random(1, this.mapWidth - width - 1);
             const y = this.random(1, this.mapHeight - height - 1);
             
-            const room = { x, y, width, height };
+            const room = { x, y, width, height, isShop: false };
             
             // Check for overlap
             if (!rooms.some(r => this.roomsOverlap(room, r))) {
@@ -602,10 +667,35 @@ class Game {
         for (let i = 1; i < rooms.length; i++) {
             this.connectRooms(rooms[i-1], rooms[i]);
         }
+
+        // Designate a shop room (20% chance, not on floor 1)
+        if (this.floor > 1 && Math.random() < 0.2 && rooms.length > 2) {
+            // Avoid first and last room
+            const shopRoomIndex = this.random(1, rooms.length - 1);
+            this.shopRoom = rooms[shopRoomIndex];
+            this.shopRoom.isShop = true;
+
+            // Spawn merchant
+            const merchantX = this.shopRoom.x + Math.floor(this.shopRoom.width / 2);
+            const merchantY = this.shopRoom.y + Math.floor(this.shopRoom.height / 2);
+            this.entities.push({
+                name: 'Merchant',
+                symbol: '&',
+                type: 'npc',
+                x: merchantX,
+                y: merchantY,
+                color: this.colors.merchant,
+                alive: true, // for rendering purposes
+            });
+        }
         
         // Place stairs in last room
         if (rooms.length > 0) {
-            const lastRoom = rooms[rooms.length - 1];
+            let lastRoom = rooms[rooms.length - 1];
+            // Avoid placing stairs in a shop
+            if (lastRoom.isShop && rooms.length > 1) {
+                lastRoom = rooms[rooms.length - 2];
+            }
             const stairX = lastRoom.x + Math.floor(lastRoom.width / 2);
             const stairY = lastRoom.y + Math.floor(lastRoom.height / 2);
             this.dungeon[stairY][stairX] = '%';
@@ -684,9 +774,11 @@ class Game {
     
     spawnEnemies() {
         // 新しい強化モンスターシステムを使用
-        // Spawn enemies in rooms (except first room where player starts)
+        // Spawn enemies in rooms (except first room and shop room)
         for (let i = 1; i < this.rooms.length; i++) {
             const room = this.rooms[i];
+            if (room.isShop) continue; // Don't spawn enemies in the shop
+
             // 階層が上がると敵の数も増える
             const numEnemies = this.random(1, Math.min(4, 2 + Math.floor(this.floor / 3)));
             
@@ -730,6 +822,41 @@ class Game {
         });
     }
     
+    spawnTraps() {
+        this.traps = [];
+        const trapTypes = [
+            { name: 'Spike Trap', type: 'damage', damage: 10, symbol: '^', color: '#e74c3c' },
+            { name: 'Teleport Trap', type: 'teleport', symbol: '^', color: '#9b59b6' },
+            { name: 'Alarm Trap', type: 'alarm', symbol: '^', color: '#f39c12' }
+        ];
+
+        // フロア全体に一定数の罠を配置
+        const floorTiles = [];
+        for (let y = 0; y < this.mapHeight; y++) {
+            for (let x = 0; x < this.mapWidth; x++) {
+                if (this.dungeon[y][x] === '.') {
+                    floorTiles.push({x, y});
+                }
+            }
+        }
+
+        const numTraps = Math.floor(floorTiles.length * 0.03); // 床タイルの3%を罠にする
+        for (let i = 0; i < numTraps; i++) {
+            const tile = floorTiles[this.random(0, floorTiles.length)];
+            
+            if (tile && !this.getTrapAt(tile.x, tile.y)) {
+                const trapType = trapTypes[this.random(0, trapTypes.length)];
+                this.traps.push({
+                    ...trapType,
+                    x: tile.x,
+                    y: tile.y,
+                    triggered: false,
+                    visible: false
+                });
+            }
+        }
+    }
+
     pickupItem() {
         const item = this.items.find(item => 
             item.x === this.player.x && item.y === this.player.y
@@ -1065,8 +1192,11 @@ class Game {
         // Clear and respawn entities and items
         this.entities = [];
         this.items = [];
+        this.projectiles = [];
+        this.traps = [];
         this.spawnEnemies();
         this.spawnItems();
+        this.spawnTraps();
     }
     
     gameOver(killer = null) {
@@ -1431,6 +1561,203 @@ class Game {
         this.removeItemFromInventory(item.id);
         this.addMessage(`You drop ${item.name}.`, 'item');
     }
+
+    // ===== ショップシステム =====
+
+    interactWithMerchant() {
+        // Check for adjacent merchant
+        let merchant = null;
+        for (let dx = -1; dx <= 1; dx++) {
+            for (let dy = -1; dy <= 1; dy++) {
+                if (dx === 0 && dy === 0) continue;
+                const entity = this.entities.find(e => e.type === 'npc' && e.name === 'Merchant' && e.x === this.player.x + dx && e.y === this.player.y + dy);
+                if (entity) {
+                    merchant = entity;
+                    break;
+                }
+            }
+            if (merchant) break;
+        }
+
+        if (merchant) {
+            this.showShopUI();
+        } else {
+            this.addMessage("There is no one to trade with here.", 'system');
+        }
+    }
+
+    generateShopInventory() {
+        this.shopInventory = [];
+        const itemTemplates = [
+            { name: 'Health Potion', symbol: '!', type: 'potion', effect: 'heal', value: 30, color: this.colors.potion, basePrice: 50 },
+            { name: 'Mana Potion', symbol: '!', type: 'potion', effect: 'mana', value: 20, color: this.colors.potion, basePrice: 40 },
+            { name: 'Sword', symbol: ')', type: 'weapon', attack: 5, color: this.colors.weapon, basePrice: 100 },
+            { name: 'Shield', symbol: ']', type: 'armor', defense: 3, color: this.colors.armor, basePrice: 80 },
+        ];
+
+        const numItems = this.random(3, 6);
+        for (let i = 0; i < numItems; i++) {
+            const template = itemTemplates[this.random(0, itemTemplates.length)];
+            let item = { ...template, id: this.nextItemId++ };
+
+            const floorBonus = Math.floor(this.floor / 4);
+            if (item.type === 'weapon' && floorBonus > 0) {
+                item.attack += floorBonus * this.random(1, 3);
+                item.name = `+${floorBonus} ${item.name}`;
+                item.basePrice += floorBonus * 50;
+            }
+            if (item.type === 'armor' && floorBonus > 0) {
+                item.defense += floorBonus * this.random(1, 2);
+                item.name = `+${floorBonus} ${item.name}`;
+                item.basePrice += floorBonus * 40;
+            }
+            
+            this.shopInventory.push(item);
+        }
+    }
+
+    showShopUI() {
+        this.generateShopInventory();
+        this.shopUIActive = true;
+        this.createShopUI();
+    }
+
+    hideShopUI() {
+        this.shopUIActive = false;
+        const overlay = document.getElementById('shopOverlay');
+        if (overlay) {
+            overlay.remove();
+        }
+        this.render();
+    }
+
+    createShopUI() {
+        const existingOverlay = document.getElementById('shopOverlay');
+        if (existingOverlay) existingOverlay.remove();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'shopOverlay';
+        overlay.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.85); z-index: 1000;
+            display: flex; justify-content: center; align-items: center;
+        `;
+
+        const shopWindow = document.createElement('div');
+        shopWindow.style.cssText = `
+            background-color: #2c3e50; color: #ecf0f1; border: 3px solid #7f8c8d;
+            padding: 20px; width: 80%; max-width: 800px; max-height: 90vh;
+            font-family: 'Courier New', monospace; display: flex; flex-direction: column;
+        `;
+
+        shopWindow.innerHTML = `
+            <div style="text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #7f8c8d; padding-bottom: 10px;">Merchant's Shop</div>
+            <div style="text-align: right; margin-bottom: 15px; font-size: 16px;">Your Gold: <span style="color: ${this.colors.gold}; font-weight: bold;">${this.player.gold}</span></div>
+        `;
+
+        const content = document.createElement('div');
+        content.style.cssText = 'display: flex; flex: 1; overflow-y: auto;';
+
+        const buyPane = document.createElement('div');
+        buyPane.style.cssText = 'flex: 1; padding-right: 10px; border-right: 1px solid #7f8c8d;';
+        buyPane.innerHTML = '<h3 style="margin-top: 0;">For Sale (Buy)</h3>';
+
+        if (this.shopInventory.length === 0) {
+            buyPane.innerHTML += '<div>Sold out!</div>';
+        } else {
+            this.shopInventory.forEach((item, index) => {
+                const itemEl = this.createShopItemElement(item, index, 'buy');
+                buyPane.appendChild(itemEl);
+            });
+        }
+
+        const sellPane = document.createElement('div');
+        sellPane.style.cssText = 'flex: 1; padding-left: 10px;';
+        sellPane.innerHTML = '<h3 style="margin-top: 0;">Your Items (Sell)</h3>';
+
+        if (this.player.inventory.length === 0) {
+            sellPane.innerHTML += '<div>Your inventory is empty.</div>';
+        } else {
+            this.player.inventory.forEach((item, index) => {
+                const itemEl = this.createShopItemElement(item, index, 'sell');
+                sellPane.appendChild(itemEl);
+            });
+        }
+
+        content.appendChild(buyPane);
+        content.appendChild(sellPane);
+        shopWindow.appendChild(content);
+        
+        const controls = document.createElement('div');
+        controls.style.cssText = 'text-align: center; margin-top: 15px; font-size: 14px;';
+        controls.textContent = 'Click item to transact. Press B or ESC to close.';
+        shopWindow.appendChild(controls);
+
+        overlay.appendChild(shopWindow);
+        document.body.appendChild(overlay);
+    }
+
+    createShopItemElement(item, index, type) {
+        const itemEl = document.createElement('div');
+        const isBuy = type === 'buy';
+        const price = isBuy ? item.basePrice : Math.floor((item.basePrice || 20) * 0.4);
+        
+        itemEl.style.cssText = 'padding: 8px; margin-bottom: 5px; cursor: pointer; border: 1px solid #34495e;';
+        itemEl.innerHTML = `
+            <span style="color: ${item.color};">${item.symbol}</span> ${item.name}
+            <span style="float: right; color: ${this.colors.gold};">${price} g</span>
+        `;
+
+        itemEl.addEventListener('mouseenter', () => { itemEl.style.backgroundColor = '#34495e'; });
+        itemEl.addEventListener('mouseleave', () => { itemEl.style.backgroundColor = 'transparent'; });
+        itemEl.addEventListener('click', () => {
+            if (isBuy) this.buyItem(index);
+            else this.sellItem(index);
+        });
+        return itemEl;
+    }
+
+    handleShopInput(e) {
+        const key = e.key.toLowerCase();
+        if (key === 'escape' || key === 'b') {
+            this.hideShopUI();
+            e.preventDefault();
+        }
+    }
+
+    buyItem(index) {
+        if (index < 0 || index >= this.shopInventory.length) return;
+        const item = this.shopInventory[index];
+        if (this.player.gold >= item.basePrice) {
+            this.player.gold -= item.basePrice;
+            this.player.inventory.push({ ...item, id: this.nextItemId++ });
+            this.shopInventory.splice(index, 1);
+            this.addMessage(`You bought ${item.name}.`, 'item');
+            this.audioManager.playSound('gold');
+            this.createShopUI();
+        } else {
+            this.addMessage("You don't have enough gold.", 'system');
+        }
+    }
+
+    sellItem(index) {
+        if (index < 0 || index >= this.player.inventory.length) return;
+        const item = this.player.inventory[index];
+        
+        const isEquipped = (this.player.equipment.weapon && this.player.equipment.weapon.id === item.id) ||
+                           (this.player.equipment.armor && this.player.equipment.armor.id === item.id);
+        if (isEquipped) {
+            this.addMessage("You cannot sell an equipped item.", 'system');
+            return;
+        }
+
+        const sellPrice = Math.floor((item.basePrice || 20) * 0.4);
+        this.player.gold += sellPrice;
+        this.removeItemFromInventory(item.id);
+        this.addMessage(`You sold ${item.name} for ${sellPrice} gold.`, 'item');
+        this.audioManager.playSound('gold');
+        this.createShopUI();
+    }
     
     // Equipment System
     equipItem(item) {
@@ -1628,6 +1955,17 @@ class Game {
                 }
             }
         }
+        
+        // Render traps
+        this.traps.forEach(trap => {
+            if (trap.visible) {
+                const screenX = trap.x - cameraX;
+                const screenY = trap.y - cameraY;
+                if (screenX >= 0 && screenX < this.viewWidth && screenY >= 0 && screenY < this.viewHeight) {
+                    this.renderEntity(screenX, screenY, trap.symbol, trap.color);
+                }
+            }
+        });
         
         // Render items
         this.items.forEach(item => {
