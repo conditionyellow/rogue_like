@@ -218,6 +218,17 @@ class Game {
     triggerTrap(trap) {
         if (trap.triggered) return;
 
+        // Saving throw based on Dexterity
+        const saveChance = this.player.dexterity * 1.5; // 10 DEX = 15% chance
+        if (Math.random() * 100 < saveChance) {
+            this.addMessage("You deftly avoid the trap!", 'system');
+            // Trap is still triggered and becomes visible, but has no effect
+            trap.triggered = true;
+            trap.visible = true;
+            this.render(); // Re-render to show the visible trap
+            return;
+        }
+
         trap.triggered = true;
         trap.visible = true;
         this.audioManager.playSound('magic');
@@ -753,6 +764,8 @@ class Game {
             baseDefense: 5,  // 基本防御力
             attack: 10,      // 計算後攻撃力
             defense: 5,      // 計算後防御力
+            baseDexterity: 10, // 基本器用さ
+            dexterity: 10,     // 計算後器用さ
             level: 1,
             experience: 0,
             experienceToNext: 100,
@@ -1159,6 +1172,7 @@ class Game {
             const mpIncrease = this.random(3, 8);
             const attackIncrease = this.random(1, 3);
             const defenseIncrease = this.random(1, 2);
+            const dexterityIncrease = this.random(0, 2); // 0 or 1
             
             this.player.maxHp += hpIncrease;
             this.player.hp += hpIncrease;
@@ -1166,6 +1180,7 @@ class Game {
             this.player.mp += mpIncrease;
             this.player.baseAttack += attackIncrease;  // 基本ステータスを更新
             this.player.baseDefense += defenseIncrease; // 基本ステータスを更新
+            this.player.baseDexterity += dexterityIncrease;
             
             // 装備込みステータスを再計算
             this.updatePlayerStats();
@@ -1174,7 +1189,7 @@ class Game {
             this.audioManager.playSound('levelUp');
             
             this.addMessage(`Level up! You are now level ${this.player.level}!`, 'system');
-            this.addMessage(`HP +${hpIncrease}, MP +${mpIncrease}, Attack +${attackIncrease}, Defense +${defenseIncrease}`, 'system');
+            this.addMessage(`HP +${hpIncrease}, MP +${mpIncrease}, Attack +${attackIncrease}, Defense +${defenseIncrease}, DEX +${dexterityIncrease}`, 'system');
         }
     }
     
@@ -1870,6 +1885,7 @@ class Game {
         // 基本ステータスから開始
         this.player.attack = this.player.baseAttack;
         this.player.defense = this.player.baseDefense;
+        this.player.dexterity = this.player.baseDexterity;
         
         // 装備ボーナスを加算
         if (this.player.equipment.weapon) {
@@ -1911,6 +1927,7 @@ class Game {
         document.getElementById('playerMaxMP').textContent = this.player.maxMp;
         document.getElementById('playerAttack').textContent = this.player.attack;
         document.getElementById('playerDefense').textContent = this.player.defense;
+        document.getElementById('playerDexterity').textContent = this.player.dexterity;
         document.getElementById('playerGold').textContent = this.player.gold;
         
         // Update floor display
