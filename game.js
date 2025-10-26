@@ -69,9 +69,9 @@ class Game {
         this.spawnEnemies();
         this.spawnItems();
         this.spawnTraps();
-        this.addMessage(`Welcome to the dungeon! (Floor ${this.floor})`, 'system');
-        this.addMessage("Find the stairs to descend deeper.", 'system');
-        this.addMessage("Press any key to enable audio...", 'system');
+        this.addMessage(loc.t('msg_welcome', { floor: this.floor }), 'system');
+        this.addMessage(loc.t('msg_find_stairs'), 'system');
+        this.addMessage(loc.t('msg_audio_prompt'), 'system');
         this.render();
         this.updateUI();
         
@@ -84,7 +84,7 @@ class Game {
             await this.audioManager.init();
             this.audioManager.startBackgroundMusic();
             this.audioInitialized = true;
-            this.addMessage("Audio enabled! 🎵", 'system');
+            this.addMessage(loc.t('msg_audio_enabled'), 'system');
         }
     }
     
@@ -221,7 +221,7 @@ class Game {
         // Saving throw based on Dexterity
         const saveChance = this.player.dexterity * 1.5; // 10 DEX = 15% chance
         if (Math.random() * 100 < saveChance) {
-            this.addMessage("You deftly avoid the trap!", 'system');
+            this.addMessage(loc.t('msg_trap_avoided'), 'system');
             // Trap is still triggered and becomes visible, but has no effect
             trap.triggered = true;
             trap.visible = true;
@@ -237,15 +237,15 @@ class Game {
             case 'damage':
                 const damage = trap.damage;
                 this.player.hp -= damage;
-                this.addMessage(`You stepped on a ${trap.name} and took ${damage} damage!`, 'combat');
+                this.addMessage(loc.t('msg_trap_damage', { trap_name: trap.name, damage: damage }), 'combat');
                 if (this.player.hp <= 0) {
                     this.player.hp = 0;
                     this.updateUI();
-                    this.gameOver(`a ${trap.name}`);
+                    this.gameOver(loc.t('msg_trap_killer', { trap_name: trap.name })); // Need to add this key
                 }
                 break;
             case 'teleport':
-                this.addMessage(`You stepped on a ${trap.name}! You are whisked away!`, 'system');
+                this.addMessage(loc.t('msg_trap_teleport', { trap_name: trap.name }), 'system');
                 const targetRoom = this.rooms[this.random(0, this.rooms.length)];
                 let newX, newY;
                 let attempts = 0;
@@ -259,7 +259,7 @@ class Game {
                 this.player.y = newY;
                 break;
             case 'alarm':
-                this.addMessage(`You stepped on an ${trap.name}! It emits a loud alarm!`, 'system');
+                this.addMessage(loc.t('msg_trap_alarm', { trap_name: trap.name }), 'system');
                 break;
         }
     }
@@ -268,7 +268,7 @@ class Game {
         // Check if player is paralyzed
         if (this.player.statusEffects && this.player.statusEffects.paralyzed && 
             this.turn < this.player.statusEffects.paralyzed) {
-            this.addMessage("You are paralyzed and cannot move!");
+            this.addMessage(loc.t('msg_paralyzed'));
             this.processTurn(); // Still process the turn even if paralyzed
             return;
         }
@@ -285,7 +285,7 @@ class Game {
                 const randomDir = directions[Math.floor(Math.random() * directions.length)];
                 dx = randomDir.x;
                 dy = randomDir.y;
-                this.addMessage("You stumble around in confusion!");
+                this.addMessage(loc.t('msg_confused'));
             }
         }
         
@@ -346,10 +346,10 @@ class Game {
         // Play combat sounds
         if (attacker === this.player) {
             this.audioManager.playSound('swordHit');
-            this.addMessage(`You hit ${defender.name} for ${damage} damage!`, 'combat');
+            this.addMessage(loc.t('msg_combat_hit_player', { defender_name: defender.name, damage: damage }), 'combat');
         } else {
             this.audioManager.playSound('hurt');
-            this.addMessage(`${attacker.name} hits you for ${damage} damage!`, 'combat');
+            this.addMessage(loc.t('msg_combat_hit_enemy', { attacker_name: attacker.name, damage: damage }), 'combat');
         }
         
         // Process special attacks when monsters attack the player
@@ -364,7 +364,7 @@ class Game {
                 this.gameOver(attacker.name); // 殺したモンスターの名前を渡す
             } else {
                 this.audioManager.playSound('enemyDeath');
-                this.addMessage(`${defender.name} dies!`, 'combat');
+                this.addMessage(loc.t('msg_enemy_dies', { defender_name: defender.name }), 'combat');
                 console.log(`DEBUG: Before exp gain - Player exp: ${this.player.experience}, Monster exp: ${defender.experience}`);
                 this.player.experience += defender.experience;
                 console.log(`DEBUG: After exp gain - Player exp: ${this.player.experience}, Needed: ${this.player.experienceToNext}`);
@@ -381,7 +381,7 @@ class Game {
                 if (!defender.statusEffects) defender.statusEffects = {};
                 defender.statusEffects.poisoned = this.turn + 5; // Lasts 5 turns
                 this.audioManager.playSound('poison');
-                this.addMessage(`${attacker.name}'s poison weakens you!`);
+                this.addMessage(loc.t('msg_poison_weakens', { attacker_name: attacker.name }));
             }
         }
         
@@ -391,7 +391,7 @@ class Game {
                 if (!defender.statusEffects) defender.statusEffects = {};
                 defender.statusEffects.paralyzed = this.turn + 3; // Lasts 3 turns
                 this.audioManager.playSound('magic');
-                this.addMessage(`${attacker.name} paralyzes you!`);
+                this.addMessage(loc.t('msg_paralyzes_you', { attacker_name: attacker.name }));
             }
         }
         
@@ -401,7 +401,7 @@ class Game {
                 if (!defender.statusEffects) defender.statusEffects = {};
                 defender.statusEffects.confused = this.turn + 4; // Lasts 4 turns
                 this.audioManager.playSound('magic');
-                this.addMessage(`${attacker.name} confuses you!`);
+                this.addMessage(loc.t('msg_confuses_you', { attacker_name: attacker.name }));
             }
         }
         
@@ -412,7 +412,7 @@ class Game {
                 defender.maxHp = Math.max(10, defender.maxHp - drainAmount);
                 if (defender.hp > defender.maxHp) defender.hp = defender.maxHp;
                 this.audioManager.playSound('drain');
-                this.addMessage(`${attacker.name} drains your life force!`);
+                this.addMessage(loc.t('msg_drains_life', { attacker_name: attacker.name }));
             }
         }
         
@@ -421,7 +421,7 @@ class Game {
             if (Math.random() < 0.20 && defender.equippedArmor) { // 20% chance
                 defender.equippedArmor.defense = Math.max(0, defender.equippedArmor.defense - 1);
                 this.audioManager.playSound('metalBreak');
-                this.addMessage(`${attacker.name}'s acid damages your armor!`);
+                this.addMessage(loc.t('msg_acid_damages_armor', { attacker_name: attacker.name }));
                 this.updatePlayerStats();
             }
         }
@@ -432,7 +432,7 @@ class Game {
                 // Nymph steals all gold
                 if (defender.gold > 0) {
                     this.audioManager.playSound('steal');
-                    this.addMessage(`${attacker.name} charms you and steals all your gold!`);
+                    this.addMessage(loc.t('msg_steal_all_gold', { thief_name: attacker.name }));
                     defender.gold = 0;
                 }
             } else {
@@ -441,7 +441,7 @@ class Game {
                 if (stolenGold > 0) {
                     defender.gold -= stolenGold;
                     this.audioManager.playSound('steal');
-                    this.addMessage(`${attacker.name} steals ${stolenGold} gold!`);
+                    this.addMessage(loc.t('msg_steal_gold', { thief_name: attacker.name, stolen_gold: stolenGold }));
                 }
             }
         }
@@ -475,25 +475,25 @@ class Game {
         // Process poison
         if (this.player.statusEffects.poisoned && this.turn >= this.player.statusEffects.poisoned) {
             delete this.player.statusEffects.poisoned;
-            this.addMessage("You feel better as the poison wears off.");
+            this.addMessage(loc.t('msg_poison_wears_off'));
         } else if (this.player.statusEffects.poisoned) {
             // Take poison damage
             const poisonDamage = Math.floor(Math.random() * 3) + 1;
             this.player.hp = Math.max(1, this.player.hp - poisonDamage);
             this.audioManager.playSound('hurt');
-            this.addMessage(`The poison courses through your veins for ${poisonDamage} damage!`);
+            this.addMessage(loc.t('msg_poison_damage', { damage: poisonDamage }));
         }
         
         // Process paralysis
         if (this.player.statusEffects.paralyzed && this.turn >= this.player.statusEffects.paralyzed) {
             delete this.player.statusEffects.paralyzed;
-            this.addMessage("You can move again!");
+            this.addMessage(loc.t('msg_paralysis_wears_off'));
         }
         
         // Process confusion
         if (this.player.statusEffects.confused && this.turn >= this.player.statusEffects.confused) {
             delete this.player.statusEffects.confused;
-            this.addMessage("Your head clears.");
+            this.addMessage(loc.t('msg_confusion_wears_off'));
         }
     }
     
@@ -510,7 +510,7 @@ class Game {
                         
                         // Show regeneration message if player can see the monster
                         if (this.isMonsterVisible(enemy)) {
-                            this.addMessage(`${enemy.name} regenerates health!`);
+                            this.addMessage(loc.t('msg_enemy_regenerates', { enemy_name: enemy.name }));
                         }
                     }
                 }
@@ -520,7 +520,7 @@ class Game {
                     if (Math.random() < 0.05) { // 5% chance per turn to change visibility
                         enemy.isInvisible = !enemy.isInvisible;
                         if (this.isMonsterVisible(enemy) && !enemy.isInvisible) {
-                            this.addMessage(`${enemy.name} suddenly appears!`);
+                            this.addMessage(loc.t('msg_enemy_appears', { enemy_name: enemy.name }));
                         }
                     }
                 }
@@ -614,7 +614,7 @@ class Game {
     
     attemptTheft(thief) {
         if (this.player.inventory.length === 0) {
-            this.addMessage(`${thief.name} tries to steal but you have nothing!`);
+            this.addMessage(loc.t('msg_steal_nothing', { thief_name: thief.name }));
             return;
         }
         
@@ -623,7 +623,7 @@ class Game {
         const stolenItem = this.player.inventory[stolenIndex];
         
         this.player.inventory.splice(stolenIndex, 1);
-        this.addMessage(`${thief.name} steals your ${stolenItem.name}!`);
+        this.addMessage(loc.t('msg_thief_steals_item', { thief_name: thief.name, item_name: stolenItem.name }));
         
         // Thief tries to run away after stealing
         const escapeDirections = [
@@ -879,7 +879,7 @@ class Game {
             if (item.type === 'gold') {
                 this.player.gold += item.value;
                 this.audioManager.playSound('gold');
-                this.addMessage(`You picked up ${item.value} gold!`, 'item');
+                this.addMessage(loc.t('msg_pickup_gold', { value: item.value }), 'item');
             } else {
                 // インベントリに追加する際に新しいIDを割り当て（重複防止）
                 const inventoryItem = {
@@ -888,13 +888,13 @@ class Game {
                 };
                 this.player.inventory.push(inventoryItem);
                 this.audioManager.playSound('itemPickup');
-                this.addMessage(`You picked up ${item.name}!`, 'item');
+                this.addMessage(loc.t('msg_pickup_item', { item_name: item.name }), 'item');
             }
             
             this.items = this.items.filter(i => i.id !== item.id);
             this.processTurn();
         } else {
-            this.addMessage("There's nothing here to pick up.", 'system');
+            this.addMessage(loc.t('msg_nothing_to_pickup'), 'system');
         }
     }
     
@@ -904,10 +904,10 @@ class Game {
         if (potion) {
             if (potion.effect === 'heal') {
                 this.player.hp = Math.min(this.player.maxHp, this.player.hp + potion.value);
-                this.addMessage(`You drink the ${potion.name} and recover ${potion.value} HP!`, 'item');
+                this.addMessage(loc.t('msg_drink_hp_potion', { potion_name: potion.name, value: potion.value }), 'item');
             } else if (potion.effect === 'mana') {
                 this.player.mp = Math.min(this.player.maxMp, this.player.mp + potion.value);
-                this.addMessage(`You drink the ${potion.name} and recover ${potion.value} MP!`, 'item');
+                this.addMessage(loc.t('msg_drink_mp_potion', { potion_name: potion.name, value: potion.value }), 'item');
             }
             
             this.removeItemFromInventory(potion.id);
@@ -923,19 +923,19 @@ class Game {
         if (equipableItem) {
             this.equipItem(equipableItem);
         } else {
-            this.addMessage("You don't have any usable items.", 'system');
+            this.addMessage(loc.t('msg_no_usable_items'), 'system');
         }
     }
     
     // 新しいアイテム選択システム
     startItemSelection() {
         if (this.player.inventory.length === 0) {
-            this.addMessage("Your inventory is empty.", 'system');
+            this.addMessage(loc.t('msg_inventory_empty'), 'system');
             return;
         }
         
         this.itemSelectionMode = true;
-        this.addMessage("=== SELECT ITEM TO USE ===", 'system');
+        this.addMessage(loc.t('msg_select_item_to_use'), 'system');
         
         this.player.inventory.forEach((item, index) => {
             const keyNumber = index + 1;
@@ -952,7 +952,7 @@ class Game {
             this.addMessage(description, 'item');
         });
         
-        this.addMessage("Press 1-9 to use item, or ESC to cancel.", 'system');
+        this.addMessage(loc.t('msg_item_selection_prompt'), 'system');
     }
     
     handleItemSelection(e) {
@@ -960,7 +960,7 @@ class Game {
         
         if (key === 'escape') {
             this.itemSelectionMode = false;
-            this.addMessage("Item selection cancelled.", 'system');
+            this.addMessage(loc.t('msg_item_selection_cancelled'), 'system');
             e.preventDefault();
             return;
         }
@@ -978,7 +978,7 @@ class Game {
     useItemByIndex(index) {
         if (index < 0 || index >= this.player.inventory.length) {
             if (this.itemSelectionMode) {
-                this.addMessage("Invalid item number.", 'system');
+                this.addMessage(loc.t('msg_invalid_item_number'), 'system');
             }
             return;
         }
@@ -988,20 +988,20 @@ class Game {
         if (item.type === 'potion') {
             if (item.effect === 'heal') {
                 if (this.player.hp >= this.player.maxHp) {
-                    this.addMessage("Your HP is already full.", 'system');
+                    this.addMessage(loc.t('msg_hp_full'), 'system');
                     return;
                 }
                 this.player.hp = Math.min(this.player.maxHp, this.player.hp + item.value);
                 this.audioManager.playSound('heal');
-                this.addMessage(`You drink the ${item.name} and recover ${item.value} HP!`, 'item');
+                this.addMessage(loc.t('msg_drink_hp_potion', { potion_name: item.name, value: item.value }), 'item');
             } else if (item.effect === 'mana') {
                 if (this.player.mp >= this.player.maxMp) {
-                    this.addMessage("Your MP is already full.", 'system');
+                    this.addMessage(loc.t('msg_mp_full'), 'system');
                     return;
                 }
                 this.player.mp = Math.min(this.player.maxMp, this.player.mp + item.value);
                 this.audioManager.playSound('mana');
-                this.addMessage(`You drink the ${item.name} and recover ${item.value} MP!`, 'item');
+                this.addMessage(loc.t('msg_drink_mp_potion', { potion_name: item.name, value: item.value }), 'item');
             }
             
             // ポーションのみ、使用後にインベントリから削除
@@ -1014,19 +1014,19 @@ class Game {
             this.equipItem(item);
             
         } else {
-            this.addMessage("You can't use that item.", 'system');
+            this.addMessage(loc.t('msg_cannot_use_item'), 'system');
         }
     }
 
     // ===== 魔法システム =====
     startMagicSelection() {
         if (this.player.spells.length === 0) {
-            this.addMessage("You don't know any spells.", 'system');
+            this.addMessage(loc.t('msg_no_spells'), 'system');
             return;
         }
 
         this.magicSelectionMode = true;
-        this.addMessage("=== CAST A SPELL ===", 'system');
+        this.addMessage(loc.t('msg_cast_spell_title'), 'system');
 
         this.player.spells.forEach((spellId, index) => {
             const spell = this.spells[spellId];
@@ -1036,7 +1036,7 @@ class Game {
             }
         });
 
-        this.addMessage("Press 1-9 to choose a spell, or ESC to cancel.", 'system');
+        this.addMessage(loc.t('msg_spell_selection_prompt'), 'system');
     }
 
     handleMagicSelection(e) {
@@ -1044,7 +1044,7 @@ class Game {
 
         if (key === 'escape') {
             this.magicSelectionMode = false;
-            this.addMessage("Spell selection cancelled.", 'system');
+            this.addMessage(loc.t('msg_spell_selection_cancelled'), 'system');
             e.preventDefault();
             return;
         }
@@ -1055,7 +1055,7 @@ class Game {
                 const spellId = this.player.spells[index];
                 this.castSpell(spellId);
             } else {
-                this.addMessage("Invalid spell number.", 'system');
+                this.addMessage(loc.t('msg_invalid_spell_number'), 'system');
             }
             this.magicSelectionMode = false;
         }
@@ -1065,12 +1065,12 @@ class Game {
     castSpell(spellId, options = {}) {
         const spell = this.spells[spellId];
         if (!spell) {
-            this.addMessage("Unknown spell.", 'system');
+            this.addMessage(loc.t('msg_unknown_spell'), 'system');
             return;
         }
 
         if (this.player.mp < spell.cost) {
-            this.addMessage("You don't have enough mana.", 'system');
+            this.addMessage(loc.t('msg_not_enough_mana'), 'system');
             return;
         }
 
@@ -1082,14 +1082,14 @@ class Game {
                 if (spellId === 'heal') {
                     const healedAmount = Math.min(this.player.maxHp - this.player.hp, spell.heal);
                     this.player.hp += healedAmount;
-                    this.addMessage(`You cast ${spell.name} and recover ${healedAmount} HP.`, 'item');
+                    this.addMessage(loc.t('msg_cast_heal', { spell_name: spell.name, healed_amount: healedAmount }), 'item');
                 }
                 this.processTurn();
                 break;
 
             case 'projectile':
                 if (spellId === 'fireball') {
-                    this.addMessage("Choose a direction for the fireball (WASD/Arrows).", 'system');
+                    this.addMessage(loc.t('msg_fireball_direction_prompt'), 'system');
                     this.gameState = 'targeting';
                     
                     const targetListener = (e) => {
@@ -1108,13 +1108,13 @@ class Game {
                                 symbol: '*',
                                 color: '#ff6347' // Tomato
                             });
-                            this.addMessage(`You cast ${spell.name}!`, 'combat');
+                            this.addMessage(loc.t('msg_cast_fireball', { spell_name: spell.name }), 'combat');
                             this.processTurn();
                         } else if (e.key === 'Escape') {
                             document.removeEventListener('keydown', targetListener);
                             this.gameState = 'playing';
                             this.player.mp += spell.cost; // Refund MP
-                            this.addMessage("Targeting cancelled.", 'system');
+                            this.addMessage(loc.t('msg_targeting_cancelled'), 'system');
                         }
                         e.preventDefault();
                     };
@@ -1188,15 +1188,15 @@ class Game {
             // Play level up sound
             this.audioManager.playSound('levelUp');
             
-            this.addMessage(`Level up! You are now level ${this.player.level}!`, 'system');
-            this.addMessage(`HP +${hpIncrease}, MP +${mpIncrease}, Attack +${attackIncrease}, Defense +${defenseIncrease}, DEX +${dexterityIncrease}`, 'system');
+            this.addMessage(loc.t('msg_level_up', { level: this.player.level }), 'system');
+            this.addMessage(loc.t('msg_level_up_stats', { hp_increase: hpIncrease, mp_increase: mpIncrease, attack_increase: attackIncrease, defense_increase: defenseIncrease, dex_increase: dexterityIncrease }), 'system');
         }
     }
     
     descendStairs() {
         this.floor++; // 階層を増やす
         this.audioManager.playSound('stairs');
-        this.addMessage(`You descend deeper into the dungeon... (Floor ${this.floor})`, 'system');
+        this.addMessage(loc.t('msg_descend_stairs', { floor: this.floor }), 'system');
         this.generateDungeon();
         
         // Place player at start of new level
@@ -1216,7 +1216,7 @@ class Game {
     
     gameOver(killer = null) {
         this.gameState = 'dead';
-        this.addMessage("You have died! Game Over.", 'combat');
+        this.addMessage(loc.t('msg_player_died_game_over'), 'combat');
         
         // ゲームオーバー画面を表示
         setTimeout(() => {
@@ -1226,9 +1226,9 @@ class Game {
     
     toggleInventory() {
         // Simple inventory display in messages (旧来のメソッド - 後方互換性のために残す)
-        this.addMessage("=== INVENTORY ===", 'system');
+        this.addMessage(loc.t('msg_inventory_title'), 'system');
         if (this.player.inventory.length === 0) {
-            this.addMessage("Your inventory is empty.", 'system');
+            this.addMessage(loc.t('msg_inventory_empty_ui'), 'system');
         } else {
             this.player.inventory.forEach((item, index) => {
                 const keyNumber = index + 1;
@@ -1244,7 +1244,7 @@ class Game {
                 
                 this.addMessage(description, 'item');
             });
-            this.addMessage("Press 1-9 to use item directly, or U to enter selection mode.", 'system');
+            this.addMessage(loc.t('msg_inventory_direct_use_prompt'), 'system');
         }
     }
     
@@ -1304,7 +1304,7 @@ class Game {
             border-bottom: 2px solid #000000;
             padding-bottom: 10px;
         `;
-        header.textContent = '🎒 INVENTORY';
+        header.textContent = loc.t('ui_inventory_title_full');
         inventoryWindow.appendChild(header);
         
         // インベントリ内容
@@ -1316,7 +1316,7 @@ class Game {
                 padding: 20px;
                 font-style: italic;
             `;
-            emptyMsg.textContent = 'Your inventory is empty.';
+            emptyMsg.textContent = loc.t('ui_inventory_empty_msg');
             inventoryWindow.appendChild(emptyMsg);
         } else {
             this.player.inventory.forEach((item, index) => {
@@ -1336,9 +1336,9 @@ class Game {
             text-align: center;
         `;
         controls.innerHTML = `
-            <strong>Controls:</strong><br>
-            Click on items to interact • ESC or I to close<br>
-            1-9: Use item directly
+            <strong>${loc.t('ui_inventory_controls_title')}</strong><br>
+            ${loc.t('ui_inventory_controls_desc')}<br>
+            ${loc.t('ui_inventory_controls_direct')}
         `;
         inventoryWindow.appendChild(controls);
         
@@ -1402,7 +1402,7 @@ class Game {
             font-weight: bold;
             font-size: 14px;
         `;
-        name.textContent = `${index + 1}. ${item.name}${isEquipped ? ' [EQUIPPED]' : ''}`;
+        name.textContent = `${index + 1}. ${item.name}${isEquipped ? loc.t('ui_equipped_tag') : ''}`;
         
         const description = document.createElement('div');
         description.style.cssText = `
@@ -1413,11 +1413,11 @@ class Game {
         
         let descText = '';
         if (item.type === 'potion') {
-            descText = `${item.effect === 'heal' ? 'HP' : 'MP'} Recovery +${item.value}`;
+            descText = item.effect === 'heal' ? loc.t('ui_hp_recovery', { value: item.value }) : loc.t('ui_mp_recovery', { value: item.value });
         } else if (item.type === 'weapon') {
-            descText = `Attack Power +${item.attack}`;
+            descText = loc.t('ui_attack_power', { value: item.attack });
         } else if (item.type === 'armor') {
-            descText = `Defense Power +${item.defense}`;
+            descText = loc.t('ui_defense_power', { value: item.defense });
         }
         description.textContent = descText;
         
@@ -1435,14 +1435,14 @@ class Game {
         if (item.type === 'potion') {
             // ポーションの場合は使用制限をチェック
             let canUse = true;
-            let useText = 'Use';
+            let useText = loc.t('ui_use_button');
             
             if (item.effect === 'heal' && this.player.hp >= this.player.maxHp) {
                 canUse = false;
-                useText = 'HP Full';
+                useText = loc.t('ui_hp_full_button');
             } else if (item.effect === 'mana' && this.player.mp >= this.player.maxMp) {
                 canUse = false;
-                useText = 'MP Full';
+                useText = loc.t('ui_mp_full_button');
             }
             
             const useBtn = this.createActionButton(useText, canUse ? '#000000' : '#999999', () => {
@@ -1458,13 +1458,13 @@ class Game {
             
         } else if (item.type === 'weapon' || item.type === 'armor') {
             if (isEquipped) {
-                const unequipBtn = this.createActionButton('Unequip', '#666666', () => {
+                const unequipBtn = this.createActionButton(loc.t('ui_unequip_button'), '#666666', () => {
                     this.unequipItem(item.type === 'weapon' ? 'weapon' : 'armor');
                     this.updateInventoryUI();
                 });
                 actions.appendChild(unequipBtn);
             } else {
-                const equipBtn = this.createActionButton('Equip', '#000000', () => {
+                const equipBtn = this.createActionButton(loc.t('ui_equip_button'), '#000000', () => {
                     this.equipItem(item);
                     this.updateInventoryUI();
                 });
@@ -1472,7 +1472,7 @@ class Game {
             }
         }
         
-        const dropBtn = this.createActionButton('Drop', '#999999', () => {
+        const dropBtn = this.createActionButton(loc.t('ui_drop_button'), '#999999', () => {
             this.dropItem(index);
             this.updateInventoryUI();
         });
@@ -1574,7 +1574,7 @@ class Game {
         
         this.items.push(droppedItem);
         this.removeItemFromInventory(item.id);
-        this.addMessage(`You drop ${item.name}.`, 'item');
+        this.addMessage(loc.t('msg_drop_item', { item_name: item.name }), 'item');
     }
 
     // ===== ショップシステム =====
@@ -1597,7 +1597,7 @@ class Game {
         if (merchant) {
             this.showShopUI();
         } else {
-            this.addMessage("There is no one to trade with here.", 'system');
+            this.addMessage(loc.t('msg_no_merchant'), 'system');
         }
     }
 
@@ -1666,8 +1666,8 @@ class Game {
         `;
 
         shopWindow.innerHTML = `
-            <div style="text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #7f8c8d; padding-bottom: 10px;">Merchant's Shop</div>
-            <div style="text-align: right; margin-bottom: 15px; font-size: 16px;">Your Gold: <span style="color: ${this.colors.gold}; font-weight: bold;">${this.player.gold}</span></div>
+            <div style="text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #7f8c8d; padding-bottom: 10px;">${loc.t('ui_shop_title')}</div>
+            <div style="text-align: right; margin-bottom: 15px; font-size: 16px;">${loc.t('ui_your_gold')}<span style="color: ${this.colors.gold}; font-weight: bold;">${this.player.gold}</span></div>
         `;
 
         const content = document.createElement('div');
@@ -1675,10 +1675,10 @@ class Game {
 
         const buyPane = document.createElement('div');
         buyPane.style.cssText = 'flex: 1; padding-right: 10px; border-right: 1px solid #7f8c8d;';
-        buyPane.innerHTML = '<h3 style="margin-top: 0;">For Sale (Buy)</h3>';
+        buyPane.innerHTML = `<h3 style="margin-top: 0;">${loc.t('ui_for_sale_title')}</h3>`;
 
         if (this.shopInventory.length === 0) {
-            buyPane.innerHTML += '<div>Sold out!</div>';
+            buyPane.innerHTML += `<div>${loc.t('ui_sold_out')}</div>`;
         } else {
             this.shopInventory.forEach((item, index) => {
                 const itemEl = this.createShopItemElement(item, index, 'buy');
@@ -1688,10 +1688,10 @@ class Game {
 
         const sellPane = document.createElement('div');
         sellPane.style.cssText = 'flex: 1; padding-left: 10px;';
-        sellPane.innerHTML = '<h3 style="margin-top: 0;">Your Items (Sell)</h3>';
+        sellPane.innerHTML = `<h3 style="margin-top: 0;">${loc.t('ui_your_items_title')}</h3>`;
 
         if (this.player.inventory.length === 0) {
-            sellPane.innerHTML += '<div>Your inventory is empty.</div>';
+            sellPane.innerHTML += `<div>${loc.t('ui_shop_inventory_empty')}</div>`;
         } else {
             this.player.inventory.forEach((item, index) => {
                 const itemEl = this.createShopItemElement(item, index, 'sell');
@@ -1705,7 +1705,7 @@ class Game {
         
         const controls = document.createElement('div');
         controls.style.cssText = 'text-align: center; margin-top: 15px; font-size: 14px;';
-        controls.textContent = 'Click item to transact. Press B or ESC to close.';
+        controls.textContent = loc.t('ui_shop_controls');
         shopWindow.appendChild(controls);
 
         overlay.appendChild(shopWindow);
@@ -1747,11 +1747,11 @@ class Game {
             this.player.gold -= item.basePrice;
             this.player.inventory.push({ ...item, id: this.nextItemId++ });
             this.shopInventory.splice(index, 1);
-            this.addMessage(`You bought ${item.name}.`, 'item');
+            this.addMessage(loc.t('msg_bought_item', { item_name: item.name }), 'item');
             this.audioManager.playSound('gold');
             this.createShopUI();
         } else {
-            this.addMessage("You don't have enough gold.", 'system');
+            this.addMessage(loc.t('msg_not_enough_gold'), 'system');
         }
     }
 
@@ -1762,14 +1762,14 @@ class Game {
         const isEquipped = (this.player.equipment.weapon && this.player.equipment.weapon.id === item.id) ||
                            (this.player.equipment.armor && this.player.equipment.armor.id === item.id);
         if (isEquipped) {
-            this.addMessage("You cannot sell an equipped item.", 'system');
+            this.addMessage(loc.t('msg_cannot_sell_equipped'), 'system');
             return;
         }
 
         const sellPrice = Math.floor((item.basePrice || 20) * 0.4);
         this.player.gold += sellPrice;
         this.removeItemFromInventory(item.id);
-        this.addMessage(`You sold ${item.name} for ${sellPrice} gold.`, 'item');
+        this.addMessage(loc.t('msg_sold_item', { item_name: item.name, gold: sellPrice }), 'item');
         this.audioManager.playSound('gold');
         this.createShopUI();
     }
@@ -1779,13 +1779,13 @@ class Game {
         if (item.type === 'weapon') {
             // 同じ武器を再装備しようとしている場合はスキップ
             if (this.player.equipment.weapon && this.player.equipment.weapon.id === item.id) {
-                this.addMessage(`${item.name} is already equipped.`, 'system');
+                this.addMessage(loc.t('msg_item_already_equipped', { item_name: item.name }), 'system');
                 return;
             }
             
             // まず、インベントリから装備するアイテムを削除
             if (!this.removeItemFromInventory(item.id)) {
-                this.addMessage("Failed to equip item - item not found in inventory.", 'system');
+                this.addMessage(loc.t('msg_failed_equip_not_found'), 'system');
                 return;
             }
             
@@ -1796,24 +1796,24 @@ class Game {
                     id: this.nextItemId++  // 新しいIDを割り当て
                 };
                 this.player.inventory.push(unequippedItem);
-                this.addMessage(`You unequip ${this.player.equipment.weapon.name}.`, 'item');
+                this.addMessage(loc.t('msg_unequip_item', { item_name: this.player.equipment.weapon.name }), 'item');
             }
             
             // 新しい武器を装備
             this.player.equipment.weapon = item;
             this.audioManager.playSound('equip');
-            this.addMessage(`You equip ${item.name}! Attack +${item.attack}`, 'item');
+            this.addMessage(loc.t('msg_equip_weapon', { item_name: item.name, attack_bonus: item.attack }), 'item');
             
         } else if (item.type === 'armor') {
             // 同じ防具を再装備しようとしている場合はスキップ
             if (this.player.equipment.armor && this.player.equipment.armor.id === item.id) {
-                this.addMessage(`${item.name} is already equipped.`, 'system');
+                this.addMessage(loc.t('msg_item_already_equipped', { item_name: item.name }), 'system');
                 return;
             }
             
             // まず、インベントリから装備するアイテムを削除
             if (!this.removeItemFromInventory(item.id)) {
-                this.addMessage("Failed to equip item - item not found in inventory.", 'system');
+                this.addMessage(loc.t('msg_failed_equip_not_found'), 'system');
                 return;
             }
             
@@ -1824,13 +1824,13 @@ class Game {
                     id: this.nextItemId++  // 新しいIDを割り当て
                 };
                 this.player.inventory.push(unequippedItem);
-                this.addMessage(`You unequip ${this.player.equipment.armor.name}.`, 'item');
+                this.addMessage(loc.t('msg_unequip_item', { item_name: this.player.equipment.armor.name }), 'item');
             }
             
             // 新しい防具を装備
             this.player.equipment.armor = item;
             this.audioManager.playSound('equip');
-            this.addMessage(`You equip ${item.name}! Defense +${item.defense}`, 'item');
+            this.addMessage(loc.t('msg_equip_armor', { item_name: item.name, defense_bonus: item.defense }), 'item');
         }
         
         // ステータスを再計算
@@ -1848,23 +1848,23 @@ class Game {
             };
             this.player.inventory.push(inventoryItem);
             this.player.equipment[slot] = null;
-            this.addMessage(`You unequip ${item.name}.`, 'item');
+            this.addMessage(loc.t('msg_unequip_item', { item_name: item.name }), 'item');
             this.updatePlayerStats();
         }
     }
     
     showEquipment() {
-        this.addMessage("=== EQUIPMENT ===", 'system');
+        this.addMessage(loc.t('msg_equipment_title'), 'system');
         if (this.player.equipment.weapon) {
-            this.addMessage(`Weapon: ${this.player.equipment.weapon.symbol} ${this.player.equipment.weapon.name} (+${this.player.equipment.weapon.attack} Attack)`, 'item');
+            this.addMessage(loc.t('msg_weapon_equipped', { weapon_name: this.player.equipment.weapon.name, attack_bonus: this.player.equipment.weapon.attack }), 'item'); // Need to add this key
         } else {
-            this.addMessage("Weapon: None", 'system');
+            this.addMessage(loc.t('msg_weapon_none'), 'system');
         }
         
         if (this.player.equipment.armor) {
-            this.addMessage(`Armor: ${this.player.equipment.armor.symbol} ${this.player.equipment.armor.name} (+${this.player.equipment.armor.defense} Defense)`, 'item');
+            this.addMessage(loc.t('msg_armor_equipped', { armor_name: this.player.equipment.armor.name, defense_bonus: this.player.equipment.armor.defense }), 'item'); // Need to add this key
         } else {
-            this.addMessage("Armor: None", 'system');
+            this.addMessage(loc.t('msg_armor_none'), 'system');
         }
     }
     
@@ -1877,7 +1877,7 @@ class Game {
             this.unequipItem('armor');
             this.processTurn();
         } else {
-            this.addMessage("You have no equipment to remove.", 'system');
+            this.addMessage(loc.t('msg_no_equipment_to_remove'), 'system');
         }
     }
     
@@ -2025,7 +2025,7 @@ class Game {
             // Check for wall collision
             if (!this.isValidMove(proj.x, proj.y)) {
                 this.projectiles.splice(i, 1);
-                this.addMessage("The fireball fizzles out against the wall.", 'system');
+                this.addMessage(loc.t('msg_fireball_fizzles'), 'system');
                 continue;
             }
 
@@ -2034,10 +2034,10 @@ class Game {
             if (enemy) {
                 const damage = proj.damage;
                 enemy.hp -= damage;
-                this.addMessage(`The fireball hits ${enemy.name} for ${damage} damage!`, 'combat');
+                this.addMessage(loc.t('msg_fireball_hits', { enemy_name: enemy.name, damage: damage }), 'combat');
                 if (enemy.hp <= 0) {
                     enemy.alive = false;
-                    this.addMessage(`${enemy.name} is vanquished by the flames!`, 'combat');
+                    this.addMessage(loc.t('msg_enemy_vanquished_fireball', { enemy_name: enemy.name }), 'combat');
                     this.player.experience += enemy.experience;
                     this.player.gold += enemy.gold;
                     this.checkLevelUp();
@@ -2134,10 +2134,10 @@ class Game {
             };
             
             localStorage.setItem('roguelike_save', JSON.stringify(gameData));
-            this.addMessage('Game saved successfully!', 'system');
+            this.addMessage(loc.t('msg_game_saved'), 'system');
             console.log('🎮 Game saved to localStorage');
         } catch (error) {
-            this.addMessage('Failed to save game!', 'system');
+            this.addMessage(loc.t('msg_save_failed'), 'system');
             console.error('💥 Save failed:', error);
         }
     }
@@ -2146,7 +2146,7 @@ class Game {
         try {
             const savedData = localStorage.getItem('roguelike_save');
             if (!savedData) {
-                this.addMessage('No saved game found!', 'system');
+                this.addMessage(loc.t('msg_no_saved_game'), 'system');
                 return;
             }
             
@@ -2173,10 +2173,10 @@ class Game {
             this.render();
             this.updateUI();
             
-            this.addMessage(`Game loaded! (Floor ${this.floor}, Turn ${this.turn})`, 'system');
+            this.addMessage(loc.t('msg_game_loaded', { floor: this.floor, turn: this.turn }), 'system');
             console.log('🎮 Game loaded from localStorage');
         } catch (error) {
-            this.addMessage('Failed to load game!', 'system');
+            this.addMessage(loc.t('msg_load_failed'), 'system');
             console.error('💥 Load failed:', error);
         }
     }
@@ -2322,23 +2322,23 @@ class Game {
                /     PEACE      \\
               /                  \\
               |                  |
-              |   killed by      |
+              |   ${loc.t('gameover_killed_by')}      |
               |                  |
               |      2025        |
              *|     *  *  *      | *
-     ________)/\\\\_//(\\/(/\\)/\\//\\/|_)_______`;
+     ________)/\\_//(\/(/\)/\//\/|_)_______`;
         
         // 死因を取得
-        let causeOfDeath = "mysterious circumstances";
+        let causeOfDeath = loc.t('gameover_cause_mysterious');
         if (killer) {
             // 英語の冠詞を適切に設定
             const vowels = ['A', 'E', 'I', 'O', 'U'];
             const article = vowels.includes(killer.charAt(0).toUpperCase()) ? 'an' : 'a';
-            causeOfDeath = `${article} ${killer}`;
+            causeOfDeath = `${article} ${killer}`; // This part is still English-specific for the article.
         }
         
         // 墓石の文字部分をカスタマイズ
-        const customTombstone = tombstone.replace('killed by a', `killed by`);
+        const customTombstone = tombstone.replace(loc.t('gameover_killed_by_placeholder'), loc.t('gameover_killed_by'));
         
         // スコア計算
         const score = this.calculateFinalScore();

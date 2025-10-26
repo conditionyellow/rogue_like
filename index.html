@@ -130,7 +130,7 @@
             margin: 5px 0;
         }
 
-        #muteButton {
+        #lang-switcher button, #muteButton {
             background-color: #2c3e50;
             border: 1px solid #7f8c8d;
             color: #ecf0f1;
@@ -139,7 +139,7 @@
             font-family: inherit;
             font-size: 12px;
         }
-        #muteButton:hover { background-color: #34495e; }
+        #lang-switcher button:hover, #muteButton:hover { background-color: #34495e; }
 
         /* Responsive Layout */
         @media (max-width: 1250px) {
@@ -172,13 +172,13 @@
     </style>
 </head>
 <body>
-    <h1>🗡️ Rogue - The Dungeon Crawler</h1>
+    <h1 data-i18n-key="game_title">🗡️ Rogue - The Dungeon Crawler</h1>
     
     <div id="main-container">
         
         <div id="left-panel">
             <div id="stats-panel" class="panel">
-                <h3>Player Stats</h3>
+                <h3 data-i18n-key="ui_stats_title">Player Stats</h3>
                 <div>Level: <span id="playerLevel">1</span> | Floor: <span id="currentFloor">1</span></div>
                 <div>HP: <span id="playerHP">100</span>/<span id="playerMaxHP">100</span></div>
                 <div class="stat-bar">
@@ -194,7 +194,7 @@
                 <div>Gold: <span id="playerGold">0</span></div>
             </div>
             <div id="inventory-panel" class="panel">
-                <h3>Inventory</h3>
+                <h3 data-i18n-key="ui_inventory_title">Inventory</h3>
                 <div id="inventory"></div>
             </div>
         </div>
@@ -205,11 +205,11 @@
 
         <div id="right-panel">
             <div id="messages-panel" class="panel">
-                <h3>Messages</h3>
+                <h3 data-i18n-key="ui_messages_title">Messages</h3>
                 <div id="messages"></div>
             </div>
             <div id="controls-panel" class="panel">
-                <h3>Controls</h3>
+                <h3 data-i18n-key="ui_controls_title">Controls</h3>
                 <div class="controls-list">
                     WASD/Arrows: Move<br>
                     Space: Wait/Rest<br>
@@ -220,18 +220,32 @@
                     1-9: Use item (direct)<br>
                     E/R: Equip/Remove
                 </div>
-                <h3 style="margin-top: 15px;">Audio</h3>
+                <h3 data-i18n-key="ui_audio_title" style="margin-top: 15px;">Audio</h3>
                 <div>
                     <label for="volumeSlider">Volume: <span id="volumeValue">70%</span></label>
                     <input type="range" id="volumeSlider" min="0" max="100" value="70">
                     <button id="muteButton" style="margin-top: 5px;">🔊 Mute</button>
+                </div>
+                <h3 style="margin-top: 15px;">Language</h3>
+                <div id="lang-switcher">
+                    <button id="lang-en">English</button>
+                    <button id="lang-ja">日本語</button>
                 </div>
             </div>
         </div>
 
     </div>
     
+    <script src="localization.js"></script>
     <script src="audio.js"></script>
     <script src="game.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            loc.init();
+            // Language switcher events
+            document.getElementById('lang-en').addEventListener('click', () => loc.setLanguage('en'));
+            document.getElementById('lang-ja').addEventListener('click', () => loc.setLanguage('ja'));
+        });
+    </script>
 </body>
 </html>
