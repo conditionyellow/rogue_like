@@ -17,6 +17,7 @@
     "msg_trap_teleport": "You stepped on a {trap_name}! You are whisked away!",
     "msg_trap_alarm": "You stepped on an {trap_name}! It emits a loud alarm!",
     "msg_trap_killer": "a {trap_name}",
+    "msg_trap_encountered": "You encountered a trap!",
     "msg_combat_hit_player": "You hit {defender_name} for {damage} damage!",
     "msg_combat_hit_enemy": "{attacker_name} hits you for {damage} damage!",
     "msg_enemy_dies": "{defender_name} dies!",

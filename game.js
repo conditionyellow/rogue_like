@@ -218,6 +218,8 @@ class Game {
     triggerTrap(trap) {
         if (trap.triggered) return;
 
+        this.addMessage(loc.t('msg_trap_encountered'), 'system'); // Add this line
+
         // Saving throw based on Dexterity
         const saveChance = this.player.dexterity * 1.5; // 10 DEX = 15% chance
         if (Math.random() * 100 < saveChance) {

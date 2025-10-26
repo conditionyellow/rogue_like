@@ -17,6 +17,7 @@
     "msg_trap_teleport": "{trap_name}を踏んだ！あなたはどこかへ転送された！",
     "msg_trap_alarm": "{trap_name}を踏んだ！大きな警報が鳴り響いた！",
     "msg_trap_killer": "{trap_name}によって",
+    "msg_trap_encountered": "罠に遭遇した！",
     "msg_combat_hit_player": "あなたは{defender_name}に{damage}のダメージを与えた！",
     "msg_combat_hit_enemy": "{attacker_name}があなたに{damage}のダメージを与えた！",
     "msg_enemy_dies": "{defender_name}は倒れた！",
