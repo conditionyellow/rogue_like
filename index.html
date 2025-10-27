@@ -197,27 +197,29 @@
             <div id="guide-panel" class="panel">
                 <h3 data-i18n-key="ui_guide_title">How to Play</h3>
                 <div class="guide-list">
+                    <p><strong data-i18n-key="guide_commands_title">Commands:</strong></p>
+                    <p data-i18n-key="guide_help_command">help: Show available commands</p>
+                    <p data-i18n-key="guide_lang_command">language [en|ja|1|2]: Change language</p>
                     <p><strong data-i18n-key="guide_movement_title">Movement:</strong></p>
-                    <p data-i18n-key="guide_movement_keys">WASD/Arrows: Move</p>
-                    <p data-i18n-key="guide_wait_rest">Space: Wait/Rest (HP/MP recovery)</p>
+                    <p data-i18n-key="guide_move_command">move [n|s|e|w|ne|nw|se|sw]: Move player</p>
+                    <p data-i18n-key="guide_rest_command">rest: Wait/Rest (HP/MP recovery)</p>
 
                     <p><strong data-i18n-key="guide_items_title">Items:</strong></p>
-                    <p data-i18n-key="guide_get_item">G: Pick up item</p>
-                    <p data-i18n-key="guide_inventory_ui">I: Open Inventory (use/drop items)</p>
-                    <p data-i18n-key="guide_use_item_select">U: Use item (select from list)</p>
-                    <p data-i18n-key="guide_use_item_direct">1-9: Use item (direct from hotbar)</p>
-                    <p data-i18n-key="guide_equip_remove">E/R: Equip/Unequip item</p>
+                    <p data-i18n-key="guide_get_command">get: Pick up item</p>
+                    <p data-i18n-key="guide_inventory_command">inventory: Open Inventory UI</p>
+                    <p data-i18n-key="guide_use_command">use [index|name]: Use item</p>
+                    <p data-i18n-key="guide_equip_command">equip [index|name]: Equip item</p>
+                    <p data-i18n-key="guide_unequip_command">unequip [slot]: Unequip item (weapon, armor, shield)</p>
 
                     <p><strong data-i18n-key="guide_magic_title">Magic:</strong></p>
-                    <p data-i18n-key="guide_cast_magic">M: Cast Magic (select spell)</p>
+                    <p data-i18n-key="guide_magic_command">magic: Open Magic selection</p>
 
                     <p><strong data-i18n-key="guide_shop_title">Shop:</strong></p>
-                    <p data-i18n-key="guide_shop_interact">B: Interact with Merchant (buy/sell)</p>
+                    <p data-i18n-key="guide_shop_command">shop: Interact with Merchant</p>
 
                     <p><strong data-i18n-key="guide_game_title">Game:</strong></p>
-                    <p data-i18n-key="guide_stairs">%: Descend stairs</p>
-                    <p data-i18n-key="guide_save_load">Ctrl+S/L: Save/Load Game</p>
-                    <p data-i18n-key="guide_language">UI Button: Switch Language</p>
+                    <p data-i18n-key="guide_save_command">save: Save Game</p>
+                    <p data-i18n-key="guide_load_command">load: Load Game</p>
                     <p data-i18n-key="guide_cancel_close">ESC: Cancel/Close UI</p>
                 </div>
             </div>
@@ -231,6 +233,7 @@
             <div id="messages-panel" class="panel">
                 <h3 data-i18n-key="ui_messages_title">Messages</h3>
                 <div id="messages"></div>
+                <input type="text" id="commandInput" placeholder="Enter command..." style="width: 100%; padding: 5px; margin-top: 10px; background-color: #34495e; border: 1px solid #7f8c8d; color: #ecf0f1; font-family: var(--font-family);">
             </div>
             <div id="controls-panel" class="panel">
                 <h3 data-i18n-key="ui_controls_title">Controls</h3>
@@ -249,11 +252,6 @@
                     <label for="volumeSlider">Volume: <span id="volumeValue">70%</span></label>
                     <input type="range" id="volumeSlider" min="0" max="100" value="70">
                     <button id="muteButton" style="margin-top: 5px;">🔊 Mute</button>
-                </div>
-                <h3 style="margin-top: 15px;">Language</h3>
-                <div id="lang-switcher">
-                    <button id="lang-en">English</button>
-                    <button id="lang-ja">日本語</button>
                 </div>
             </div>
         </div>

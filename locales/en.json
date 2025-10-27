@@ -136,7 +136,6 @@
     "guide_game_title": "Game:",
     "guide_stairs": "%: Descend stairs",
     "guide_save_load": "Ctrl+S/L: Save/Load Game",
-    "guide_language": "UI Button: Switch Language",
     "guide_cancel_close": "ESC: Cancel/Close UI",
     "item_name_health_potion": "Health Potion",
     "item_name_mana_potion": "Mana Potion",
@@ -176,5 +175,11 @@
     "monster_name_xeroc": "Xeroc",
     "monster_name_yeti": "Yeti",
     "monster_name_dragon": "Dragon",
-    "monster_name_jabberwock": "Jabberwock"
+    "monster_name_jabberwock": "Jabberwock",
+    "cmd_help_message": "Available commands: help, language [en|ja|1|2]",
+    "cmd_help_list": "Type 'help' for a list of commands.",
+    "cmd_unknown_command": "Unknown command: '{command}'. Type 'help' for a list of commands.",
+    "cmd_lang_prompt": "Select language: 'language 1' for English, 'language 2' for Japanese.",
+    "cmd_lang_set": "Language set to {lang}.",
+    "cmd_lang_invalid": "Invalid language selection. Please use 'language 1' or 'language 2'."
 }

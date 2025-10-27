@@ -136,7 +136,6 @@
     "guide_game_title": "ゲーム：",
     "guide_stairs": "%: 階段を降りる",
     "guide_save_load": "Ctrl+S/L: ゲームをセーブ/ロード",
-    "guide_language": "UIボタン: 言語切り替え",
     "guide_cancel_close": "ESC: キャンセル/UIを閉じる",
     "item_name_health_potion": "回復薬",
     "item_name_mana_potion": "魔力薬",
@@ -176,5 +175,11 @@
     "monster_name_xeroc": "ゼロック",
     "monster_name_yeti": "イエティ",
     "monster_name_dragon": "ドラゴン",
-    "monster_name_jabberwock": "ジャバウォック"
+    "monster_name_jabberwock": "ジャバウォック",
+    "cmd_help_message": "利用可能なコマンド: help, language [en|ja|1|2]",
+    "cmd_help_list": "コマンドリストを表示するには 'help' と入力してください。",
+    "cmd_unknown_command": "不明なコマンド: '{command}'。コマンドリストを表示するには 'help' と入力してください。",
+    "cmd_lang_prompt": "言語を選択: 英語は 'language 1'、日本語は 'language 2' と入力してください。",
+    "cmd_lang_set": "言語を{lang}に設定しました。",
+    "cmd_lang_invalid": "無効な言語選択です。'language 1' または 'language 2' を使用してください。"
 }

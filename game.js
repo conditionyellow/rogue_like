@@ -31,6 +31,12 @@ export class Game {
         this.shopInventory = []; // ショップの商品リスト
         this.shopRoom = null; // ショップ部屋の参照
 
+        // コマンド入力関連
+        this.commandInput = null; // 後で初期化
+        this.commandHistory = [];
+        this.commandHistoryIndex = -1;
+        this.isCommandInputFocused = false; // コマンド入力がフォーカスされているか
+
         // ゲーム内の全魔法を定義
         this.spells = {
             'fireball': { name: 'Fireball', cost: 10, damage: 15, range: 6, type: 'projectile' },
@@ -96,7 +102,19 @@ export class Game {
     }
     
     setupEventListeners() {
-        document.addEventListener('keydown', (e) => this.handleInput(e));
+        this.commandInput = document.getElementById('commandInput');
+
+        // コマンド入力フィールドのイベントリスナー
+        this.commandInput.addEventListener('keydown', (e) => this.handleCommandInput(e));
+        this.commandInput.addEventListener('focus', () => { this.isCommandInputFocused = true; });
+        this.commandInput.addEventListener('blur', () => { this.isCommandInputFocused = false; });
+
+        // 全体のキーダウンイベントリスナー（コマンド入力がフォーカスされていない場合のみ処理）
+        document.addEventListener('keydown', (e) => {
+            if (!this.isCommandInputFocused) {
+                this.handleInput(e);
+            }
+        });
         
         // Audio controls
         const volumeSlider = document.getElementById('volumeSlider');
@@ -147,75 +165,234 @@ export class Game {
             return;
         }
         
-        let moved = false;
-        let dx = 0, dy = 0;
+        // Handle UI closing with Escape key
+        if (e.key === 'Escape') {
+            if (this.inventoryUIActive) {
+                this.hideInventoryUI();
+            } else if (this.shopUIActive) {
+                this.hideShopUI();
+            } else if (this.itemSelectionMode) {
+                this.itemSelectionMode = false;
+                this.addMessage(loc.t('msg_item_selection_cancelled'), 'system');
+            } else if (this.magicSelectionMode) {
+                this.magicSelectionMode = false;
+                this.addMessage(loc.t('msg_spell_selection_cancelled'), 'system');
+            }
+            e.preventDefault();
+            return;
+        }
         
-        switch(e.key.toLowerCase()) {
-            case 'w':
-            case 'arrowup':
-                dy = -1;
-                moved = true;
+        // If no UI is active and it's not an Escape key, do nothing (movement and actions are now commands)
+        e.preventDefault();
+    }
+
+    handleCommandInput(e) {
+        if (e.key === 'Enter') {
+            const commandText = this.commandInput.value.trim();
+            if (commandText) {
+                this.addMessage(`> ${commandText}`, 'command'); // Display command in message log
+                this.commandHistory.unshift(commandText); // Add to history
+                this.commandHistoryIndex = -1; // Reset history index
+                this.commandInput.value = ''; // Clear input
+                this.handleCommand(commandText); // Process command
+            }
+            e.preventDefault(); // Prevent form submission or other default behavior
+        } else if (e.key === 'ArrowUp') {
+            if (this.commandHistory.length > 0 && this.commandHistoryIndex < this.commandHistory.length - 1) {
+                this.commandHistoryIndex++;
+                this.commandInput.value = this.commandHistory[this.commandHistoryIndex];
+                e.preventDefault();
+            }
+        } else if (e.key === 'ArrowDown') {
+            if (this.commandHistoryIndex > 0) {
+                this.commandHistoryIndex--;
+                this.commandInput.value = this.commandHistory[this.commandHistoryIndex];
+                e.preventDefault();
+            } else if (this.commandHistoryIndex === 0) {
+                this.commandHistoryIndex = -1;
+                this.commandInput.value = '';
+                e.preventDefault();
+            }
+        }
+    }
+
+    handleCommand(commandText) {
+        const parts = commandText.toLowerCase().split(' ');
+        const command = parts[0];
+        const args = parts.slice(1);
+
+        switch (command) {
+            case 'language':
+            case 'lang':
+                this.handleLanguageCommand(args);
                 break;
-            case 's':
-            case 'arrowdown':
-                dy = 1;
-                moved = true;
+            case 'move':
+                if (args.length > 0) {
+                    this.handleMovementCommand(args[0]);
+                } else {
+                    this.addMessage(loc.t('cmd_move_no_direction'), 'system');
+                }
                 break;
-            case 'a':
-            case 'arrowleft':
-                dx = -1;
-                moved = true;
+            case 'n': case 's': case 'e': case 'w': case 'ne': case 'nw': case 'se': case 'sw':
+            case 'up': case 'down': case 'left': case 'right':
+                this.handleMovementCommand(command);
                 break;
-            case 'd':
-            case 'arrowright':
-                dx = 1;
-                moved = true;
-                break;
-            case ' ':
-                // Wait/Rest
+            case 'rest':
+            case 'wait':
                 this.player.rest();
                 this.processTurn();
+                this.addMessage(loc.t('cmd_rest_success'), 'system');
                 break;
-            case 'g':
+            case 'get':
+            case 'pickup':
                 this.pickupItem();
                 break;
-            case 'u':
-                this.startItemSelection();
-                break;
+            case 'inventory':
             case 'i':
                 this.showInventoryUI();
                 break;
+            case 'use':
+                if (args.length > 0) {
+                    const itemIdentifier = args.join(' ');
+                    this.handleUseItemCommand(itemIdentifier);
+                } else {
+                    this.addMessage(loc.t('cmd_use_no_item'), 'system');
+                }
+                break;
+            case 'magic':
             case 'm':
                 this.startMagicSelection();
                 break;
-            case 'e':
-                this.showEquipment();
+            case 'equip':
+                if (args.length > 0) {
+                    const itemIdentifier = args.join(' ');
+                    this.handleEquipItemCommand(itemIdentifier);
+                } else {
+                    this.addMessage(loc.t('cmd_equip_no_item'), 'system');
+                }
                 break;
-            case 'r':
-                this.removeEquipment();
+            case 'unequip':
+                if (args.length > 0) {
+                    this.handleUnequipCommand(args[0]);
+                } else {
+                    this.addMessage(loc.t('cmd_unequip_no_slot'), 'system');
+                }
                 break;
+            case 'shop':
             case 'b':
                 this.interactWithMerchant();
                 break;
-            // 🆕 セーブ/ロード機能
-            case 'ctrl+s':
+            case 'save':
                 this.saveGame();
                 break;
-            case 'ctrl+l':
+            case 'load':
                 this.loadGame();
                 break;
-            // 数字キーでのダイレクトアイテム使用
-            case '1': case '2': case '3': case '4': case '5':
-            case '6': case '7': case '8': case '9':
-                this.useItemByIndex(parseInt(e.key) - 1);
+            case 'help':
+                this.addMessage(loc.t('cmd_help_message'), 'system');
+                this.addMessage(loc.t('cmd_help_list'), 'system');
+                break;
+            // Add other commands here later
+            default:
+                this.addMessage(loc.t('cmd_unknown_command', { command: commandText }), 'system');
                 break;
         }
-        
+    }
+
+    handleLanguageCommand(args) {
+        if (args.length === 0) {
+            this.addMessage(loc.t('cmd_lang_prompt'), 'system');
+            this.addMessage('1. English (en)', 'system');
+            this.addMessage('2. 日本語 (ja)', 'system');
+            return;
+        }
+
+        const selection = args[0];
+        if (selection === '1' || selection === 'en') {
+            loc.setLanguage('en');
+            this.addMessage(loc.t('cmd_lang_set', { lang: 'English' }), 'system');
+        } else if (selection === '2' || selection === 'ja') {
+            loc.setLanguage('ja');
+            this.addMessage(loc.t('cmd_lang_set', { lang: '日本語' }), 'system');
+        } else {
+            this.addMessage(loc.t('cmd_lang_invalid'), 'system');
+        }
+    }
+
+    handleMovementCommand(direction) {
+        let dx = 0;
+        let dy = 0;
+        let moved = false;
+
+        switch (direction) {
+            case 'n': case 'north': case 'up':
+                dy = -1; moved = true; break;
+            case 's': case 'south': case 'down':
+                dy = 1; moved = true; break;
+            case 'e': case 'east': case 'right':
+                dx = 1; moved = true; break;
+            case 'w': case 'west': case 'left':
+                dx = -1; moved = true; break;
+            case 'ne': case 'northeast':
+                dx = 1; dy = -1; moved = true; break;
+            case 'nw': case 'northwest':
+                dx = -1; dy = -1; moved = true; break;
+            case 'se': case 'southeast':
+                dx = 1; dy = 1; moved = true; break;
+            case 'sw': case 'southwest':
+                dx = -1; dy = 1; moved = true; break;
+        }
+
         if (moved) {
             this.movePlayer(dx, dy);
+        } else {
+            this.addMessage(loc.t('cmd_move_invalid_direction'), 'system');
         }
-        
-        e.preventDefault();
+    }
+
+    handleUseItemCommand(itemIdentifier) {
+        const index = parseInt(itemIdentifier) - 1;
+        let item = null;
+
+        if (!isNaN(index) && index >= 0 && index < this.player.inventory.length) {
+            item = this.player.inventory[index];
+        } else {
+            // Try to find by name
+            item = this.player.inventory.find(i => i.name.toLowerCase() === itemIdentifier.toLowerCase());
+        }
+
+        if (item) {
+            this.useItemByIndex(this.player.inventory.indexOf(item));
+        } else {
+            this.addMessage(loc.t('cmd_use_item_not_found', { item_name: itemIdentifier }), 'system');
+        }
+    }
+
+    handleEquipItemCommand(itemIdentifier) {
+        const index = parseInt(itemIdentifier) - 1;
+        let item = null;
+
+        if (!isNaN(index) && index >= 0 && index < this.player.inventory.length) {
+            item = this.player.inventory[index];
+        } else {
+            // Try to find by name
+            item = this.player.inventory.find(i => i.name.toLowerCase() === itemIdentifier.toLowerCase());
+        }
+
+        if (item) {
+            this.equipItem(item);
+        } else {
+            this.addMessage(loc.t('cmd_equip_item_not_found', { item_name: itemIdentifier }), 'system');
+        }
+    }
+
+    handleUnequipCommand(slot) {
+        const validSlots = ['weapon', 'armor', 'shield'];
+        if (validSlots.includes(slot.toLowerCase())) {
+            this.unequipItem(slot.toLowerCase());
+        } else {
+            this.addMessage(loc.t('cmd_unequip_invalid_slot', { slot: slot }), 'system');
+        }
     }
     
     getTrapAt(x, y) {
