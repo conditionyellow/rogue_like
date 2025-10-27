@@ -44,8 +44,8 @@ export class Game {
         this.maxMessages = 50;
         
         this.colors = {
-            background: '#1a1a1a',        // ダークグレー背景
-            wall: '#4a4a4a',              // ミディアムグレーの壁
+            background: '#000000',        // 黒背景
+            wall: '#888888',              // 壁の文字色（一時的にグレー）
             floor: '#2d2d2d',             // ダークグレーの床
             door: '#6a9bd1',              // ソフトブルーのドア/通路
             player: '#7dd87d',            // 明るい緑のプレイヤー
@@ -61,6 +61,9 @@ export class Game {
             textSecondary: '#bdc3c7',     // セカンダリテキスト色
             ui: '#34495e'                 // UI要素色
         };
+
+        this.fov = []; // Field of View: stores explored/visible state of each tile
+        this.visibleTiles = new Set(); // Stores currently visible tile coordinates (e.g., "x,y")
     }
     
     async init() {
@@ -786,7 +789,8 @@ export class Game {
             spells: ['heal', 'fireball'], // 習得済みの魔法
             equipment: {     // 装備スロット
                 weapon: null,
-                armor: null
+                armor: null,
+                shield: null
             },
             symbol: '@',
             color: this.colors.player,
@@ -795,6 +799,70 @@ export class Game {
                 this.mp = Math.min(this.maxMp, this.mp + 1);
             }
         };
+    }
+
+    calculateFOV() {
+        // Reset visible tiles for current turn
+        this.visibleTiles.clear();
+
+        // Ensure fov array is initialized for the current dungeon
+        if (this.fov.length === 0 || this.fov.length !== this.mapHeight || this.fov[0].length !== this.mapWidth) {
+            this.fov = Array(this.mapHeight).fill(0).map(() => Array(this.mapWidth).fill(false));
+        }
+
+        const playerX = this.player.x;
+        const playerY = this.player.y;
+        const fovRange = 4; // User specified 4 tiles
+
+        // Mark player's tile as visible and explored
+        this.fov[playerY][playerX] = true;
+        this.visibleTiles.add(`${playerX},${playerY}`);
+
+        // Iterate through all tiles in a square around the player
+        for (let y = playerY - fovRange; y <= playerY + fovRange; y++) {
+            for (let x = playerX - fovRange; x <= playerX + fovRange; x++) {
+                // Check map bounds
+                if (x < 0 || x >= this.mapWidth || y < 0 || y >= this.mapHeight) {
+                    continue;
+                }
+
+                // Check distance (circular FOV)
+                const distance = Math.sqrt(Math.pow(x - playerX, 2) + Math.pow(y - playerY, 2));
+                if (distance > fovRange) {
+                    continue;
+                }
+
+                // Perform raycasting from player to (x, y)
+                if (this.hasLineOfSight(playerX, playerY, x, y)) {
+                    this.fov[y][x] = true;
+                    this.visibleTiles.add(`${x},${y}`);
+                }
+            }
+        }
+    }
+
+    // Bresenham's Line Algorithm (simplified for LOS checking)
+    hasLineOfSight(x0, y0, x1, y1) {
+        let dx = Math.abs(x1 - x0);
+        let dy = Math.abs(y1 - y0);
+        let sx = (x0 < x1) ? 1 : -1;
+        let sy = (y0 < y1) ? 1 : -1;
+        let err = dx - dy;
+
+        while (true) {
+            // If current tile is a wall and not the starting point or ending point, block LOS
+            if (this.dungeon[y0][x0] === '#' && !(x0 === this.player.x && y0 === this.player.y) && !(x0 === x1 && y0 === y1)) {
+                return false;
+            }
+
+            if (x0 === x1 && y0 === y1) {
+                break;
+            }
+            let e2 = 2 * err;
+            if (e2 > -dy) { err -= dy; x0 += sx; }
+            if (e2 < dx) { err += dx; y0 += sy; }
+        }
+        return true;
     }
     
     spawnEnemies() {
@@ -1368,8 +1436,9 @@ export class Game {
         const itemDiv = document.createElement('div');
         
         // 装備中のアイテムかチェック
-        const isEquipped = (this.player.equipment.weapon && this.player.equipment.weapon.name === item.name) ||
-                          (this.player.equipment.armor && this.player.equipment.armor.name === item.name);
+        const isEquipped = (this.player.equipment.weapon && this.player.equipment.weapon.id === item.id) ||
+                          (this.player.equipment.armor && this.player.equipment.armor.id === item.id) ||
+                          (this.player.equipment.shield && this.player.equipment.shield.id === item.id);
         
         itemDiv.style.cssText = `
             display: flex;
@@ -1429,6 +1498,8 @@ export class Game {
             descText = loc.t('ui_attack_power', { value: item.attack });
         } else if (item.type === 'armor') {
             descText = loc.t('ui_defense_power', { value: item.defense });
+        } else if (item.type === 'shield') { // Add shield description
+            descText = loc.t('ui_defense_power', { value: item.defense });
         }
         description.textContent = descText;
         
@@ -1467,10 +1538,14 @@ export class Game {
             }
             actions.appendChild(useBtn);
             
-        } else if (item.type === 'weapon' || item.type === 'armor') {
+        } else if (item.type === 'weapon' || item.type === 'armor' || item.type === 'shield') { // Add shield
             if (isEquipped) {
                 const unequipBtn = this.createActionButton(loc.t('ui_unequip_button'), '#666666', () => {
-                    this.unequipItem(item.type === 'weapon' ? 'weapon' : 'armor');
+                    let slot;
+                    if (item.type === 'weapon') slot = 'weapon';
+                    else if (item.type === 'armor') slot = 'armor';
+                    else if (item.type === 'shield') slot = 'shield'; // Determine slot for shield
+                    this.unequipItem(slot);
                     this.updateInventoryUI();
                 });
                 actions.appendChild(unequipBtn);
@@ -1498,7 +1573,7 @@ export class Game {
             if (e.target.tagName !== 'BUTTON') {
                 if (item.type === 'potion') {
                     this.useItemByIndex(index);
-                } else if ((item.type === 'weapon' || item.type === 'armor') && !isEquipped) {
+                } else if ((item.type === 'weapon' || item.type === 'armor' || item.type === 'shield') && !isEquipped) { // Add shield
                     this.equipItem(item);
                 }
                 this.updateInventoryUI();
@@ -1558,7 +1633,7 @@ export class Game {
                 const item = this.player.inventory[index];
                 if (item.type === 'potion') {
                     this.useItemByIndex(index);
-                } else if (item.type === 'weapon' || item.type === 'armor') {
+                } else if (item.type === 'weapon' || item.type === 'armor' || item.type === 'shield') { // Add shield
                     this.equipItem(item);
                 }
                 this.updateInventoryUI();
@@ -1840,10 +1915,37 @@ export class Game {
             }
             
             // 新しい防具を装備
-            this.player.equipment.armor = item;
-            this.audioManager.playSound('equip');
-            this.addMessage(loc.t('msg_equip_armor', { item_name: item.name, defense_bonus: item.defense }), 'item');
+        this.player.equipment.armor = item;
+        this.audioManager.playSound('equip');
+        this.addMessage(loc.t('msg_equip_armor', { item_name: item.name, defense_bonus: item.defense }), 'item');
+    } else if (item.type === 'shield') { // Add shield equip logic
+        // 同じ盾を再装備しようとしている場合はスキップ
+        if (this.player.equipment.shield && this.player.equipment.shield.id === item.id) {
+            this.addMessage(loc.t('msg_item_already_equipped', { item_name: item.name }), 'system');
+            return;
         }
+        
+        // まず、インベントリから装備するアイテムを削除
+        if (!this.removeItemFromInventory(item.id)) {
+            this.addMessage(loc.t('msg_failed_equip_not_found'), 'system');
+            return;
+        }
+        
+        // 既存の盾を外してインベントリに戻す
+        if (this.player.equipment.shield) {
+            const unequippedItem = {
+                ...this.player.equipment.shield,
+                id: this.nextItemId++  // 新しいIDを割り当て
+            };
+            this.player.inventory.push(unequippedItem);
+            this.addMessage(loc.t('msg_unequip_item', { item_name: this.player.equipment.shield.name }), 'item');
+        }
+        
+        // 新しい盾を装備
+        this.player.equipment.shield = item;
+        this.audioManager.playSound('equip');
+        this.addMessage(loc.t('msg_equip_shield', { item_name: item.name, defense_bonus: item.defense }), 'item');
+    }
         
         // ステータスを再計算
         this.updatePlayerStats();
@@ -1878,6 +1980,12 @@ export class Game {
         } else {
             this.addMessage(loc.t('msg_armor_none'), 'system');
         }
+
+        if (this.player.equipment.shield) { // Add shield equipped display
+            this.addMessage(loc.t('msg_shield_equipped', { shield_name: this.player.equipment.shield.name, defense_bonus: this.player.equipment.shield.defense }), 'item'); // Need to add this key
+        } else {
+            this.addMessage(loc.t('msg_shield_none'), 'system');
+        }
     }
     
     removeEquipment() {
@@ -1887,6 +1995,9 @@ export class Game {
             this.processTurn();
         } else if (this.player.equipment.armor) {
             this.unequipItem('armor');
+            this.processTurn();
+        } else if (this.player.equipment.shield) { // Add shield unequip priority
+            this.unequipItem('shield');
             this.processTurn();
         } else {
             this.addMessage(loc.t('msg_no_equipment_to_remove'), 'system');
@@ -1905,6 +2016,9 @@ export class Game {
         }
         if (this.player.equipment.armor) {
             this.player.defense += this.player.equipment.armor.defense || 0;
+        }
+        if (this.player.equipment.shield) { // Add shield defense
+            this.player.defense += this.player.equipment.shield.defense || 0;
         }
     }
     
@@ -1954,6 +2068,7 @@ export class Game {
         document.getElementById('manaBar').style.width = manaPercent + '%';
     }
      render() {
+        this.calculateFOV(); // Calculate FOV before rendering
         // ダークモード背景に変更
         this.ctx.fillStyle = this.colors.background;
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
@@ -1962,22 +2077,36 @@ export class Game {
         const cameraX = this.player.x - Math.floor(this.viewWidth / 2);
         const cameraY = this.player.y - Math.floor(this.viewHeight / 2);
 
-        // Render dungeon
+        // Render dungeon based on FOV
         for (let y = 0; y < this.viewHeight; y++) {
             for (let x = 0; x < this.viewWidth; x++) {
                 const worldX = x + cameraX;
                 const worldY = y + cameraY;
 
                 if (worldX >= 0 && worldX < this.mapWidth && worldY >= 0 && worldY < this.mapHeight) {
-                    const tile = this.dungeon[worldY][worldX];
-                    this.renderTile(x, y, tile);
+                    const isVisible = this.visibleTiles.has(`${worldX},${worldY}`);
+                    const isExplored = this.fov[worldY] && this.fov[worldY][worldX]; // Check if explored
+
+                    if (isVisible) {
+                        const tile = this.dungeon[worldY][worldX];
+                        this.renderTile(x, y, tile, false); // Not dimmed
+                    } else if (isExplored) {
+                        const tile = this.dungeon[worldY][worldX];
+                        this.renderTile(x, y, tile, true); // Dimmed
+                    } else {
+                        // Unexplored, render nothing (or a solid black tile)
+                        this.ctx.fillStyle = this.colors.background; // Solid black for unexplored
+                        this.ctx.fillRect(x * this.tileSize, y * this.tileSize, this.tileSize, this.tileSize);
+                    }
                 }
             }
         }
         
-        // Render traps
+        // Render traps, items, entities only if visible
         this.traps.forEach(trap => {
-            if (trap.visible) {
+            const worldX = trap.x;
+            const worldY = trap.y;
+            if (this.visibleTiles.has(`${worldX},${worldY}`)) { // Only render if visible
                 const screenX = trap.x - cameraX;
                 const screenY = trap.y - cameraY;
                 if (screenX >= 0 && screenX < this.viewWidth && screenY >= 0 && screenY < this.viewHeight) {
@@ -1986,35 +2115,32 @@ export class Game {
             }
         });
         
-        // Render items
         this.items.forEach(item => {
-            const screenX = item.x - cameraX;
-            const screenY = item.y - cameraY;
-            
-            if (screenX >= 0 && screenX < this.viewWidth && screenY >= 0 && screenY < this.viewHeight) {
-                this.renderEntity(screenX, screenY, item.symbol, item.color);
+            const worldX = item.x;
+            const worldY = item.y;
+            if (this.visibleTiles.has(`${worldX},${worldY}`)) { // Only render if visible
+                const screenX = item.x - cameraX;
+                const screenY = item.y - cameraY;
+                if (screenX >= 0 && screenX < this.viewWidth && screenY >= 0 && screenY < this.viewHeight) {
+                    this.renderEntity(screenX, screenY, item.symbol, item.color);
+                }
             }
         });
         
-        // Render entities
         this.entities.forEach(entity => {
-            if (entity.alive) {
+            const worldX = entity.x;
+            const worldY = entity.y;
+            if (this.visibleTiles.has(`${worldX},${worldY}`)) { // Only render if visible
                 const screenX = entity.x - cameraX;
                 const screenY = entity.y - cameraY;
-                
                 if (screenX >= 0 && screenX < this.viewWidth && screenY >= 0 && screenY < this.viewHeight) {
                     this.renderEntity(screenX, screenY, entity.symbol, entity.color);
                 }
             }
         });
 
-        // Render projectiles
-        this.renderProjectiles(cameraX, cameraY);
-        
-        // Render player
-        const playerScreenX = this.player.x - cameraX;
-        const playerScreenY = this.player.y - cameraY;
-        this.renderEntity(playerScreenX, playerScreenY, this.player.symbol, this.player.color);
+        // Render player (always visible)
+        this.renderEntity(this.player.x - cameraX, this.player.y - cameraY, this.player.symbol, this.player.color);
     }
 
     updateProjectiles() {
@@ -2065,30 +2191,39 @@ export class Game {
             }
         });
     }
-     renderTile(x, y, tile) {
+     renderTile(x, y, tile, dimmed) {
         const pixelX = x * this.tileSize;
         const pixelY = y * this.tileSize;
 
+        let displayChar = '';
+        let color = '';
+
         switch(tile) {
             case '#':
-                this.ctx.fillStyle = this.colors.wall;
+                displayChar = '#';
+                color = dimmed ? this.colors.textSecondary : this.colors.wall;
                 break;
             case '.':
-                this.ctx.fillStyle = this.colors.floor;
+                displayChar = '.';
+                color = dimmed ? this.colors.textSecondary : this.colors.floor;
                 break;
             case '%':
-                this.ctx.fillStyle = this.colors.floor;
+                displayChar = '%';
+                color = dimmed ? this.colors.textSecondary : this.colors.stairs;
                 break;
             default:
+                // For unknown tiles or background, fill with background color
                 this.ctx.fillStyle = this.colors.background;
+                this.ctx.fillRect(pixelX, pixelY, this.tileSize, this.tileSize);
+                return; // Nothing more to render for this tile
         }
 
+        // First, fill the background of the tile with the general background color
+        this.ctx.fillStyle = this.colors.background;
         this.ctx.fillRect(pixelX, pixelY, this.tileSize, this.tileSize);
 
-        // Render stairs symbol
-        if (tile === '%') {
-            this.renderEntity(x, y, '%', this.colors.stairs);
-        }
+        // Then, render the character
+        this.renderEntity(x, y, displayChar, color);
     }
     
     renderEntity(x, y, symbol, color) {
@@ -2415,23 +2550,23 @@ ${customTombstone}
     }
     
     calculateFinalScore() {
-        // オリジナルRogueスタイルのスコア計算
-        let score = 0;
-        score += this.player.gold * 1; // ゴールド
-        score += this.player.experience * 2; // 経験値
-        score += (this.player.level - 1) * 100; // レベル
-        score += this.floor * 50; // 到達階層
-        score += this.turn * 1; // 生存ターン数
-        
-        // 装備品ボーナス
-        if (this.player.equipment.weapon) {
-            score += this.player.equipment.weapon.attack * 25;
+        const stats = this.getGameStats();
+        // 最終スコア = (Gold × 5) + (Experience × 2) + (Level × 100) + 
+        //             (Floor × 50) - (Turns × 0.1) + 装備ボーナス
+        let score = (stats.gold * 5) + (stats.experience * 2) + (stats.level * 100) + (stats.floor * 50) - (stats.turns * 0.1);
+
+        // 装備ボーナス = (武器攻撃力 × 20) + (防具防御力 × 15)
+        if (stats.weapon) {
+            score += stats.weapon.attack * 20;
         }
-        if (this.player.equipment.armor) {
-            score += this.player.equipment.armor.defense * 25;
+        if (stats.armor) {
+            score += stats.armor.defense * 15;
         }
-        
-        return score;
+        if (stats.shield) { // Add shield defense bonus
+            score += stats.shield.defense * 10;
+        }
+
+        return Math.max(0, Math.floor(score));
     }
     
     getGameStats() {

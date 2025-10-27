@@ -123,6 +123,17 @@ export const itemTemplates = [
         rarity: 'rare'
     },
 
+    // Shields
+    {
+        id: 'buckler',
+        nameKey: 'item_name_buckler',
+        symbol: ']',
+        type: 'shield',
+        defense: 2,
+        color: '#3498db',
+        basePrice: 60
+    },
+
     // Gold (special type, not really an item to be picked up in the same way)
     {
         id: 'gold_coin',
