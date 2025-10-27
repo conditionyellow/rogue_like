@@ -45,8 +45,10 @@ export class Game {
         
         this.colors = {
             background: '#000000',        // 黒背景
-            wall: '#888888',              // 壁の文字色（一時的にグレー）
-            floor: '#2d2d2d',             // ダークグレーの床
+            wall: '#FFFFFF',              // 可視の壁は白
+            wallExplored: '#444444',      // 探索済みの壁は暗いグレー
+            floor: '#AAAAAA',             // 可視の床はライトグレー
+            floorExplored: '#222222',     // 探索済みの床は非常に暗いグレー
             door: '#6a9bd1',              // ソフトブルーのドア/通路
             player: '#7dd87d',            // 明るい緑のプレイヤー
             enemy: '#e74c3c',             // 温かい赤の敵
@@ -56,7 +58,8 @@ export class Game {
             weapon: '#e67e22',            // オレンジの武器
             armor: '#3498db',             // 青の防具
             gold: '#f1c40f',              // 金色のゴールド
-            stairs: '#ecf0f1',            // ライトグレーの階段
+            stairs: '#FFFF00',            // 可視の階段は黄色
+            stairsExplored: '#555500',    // 探索済みの階段は暗い黄色
             text: '#ecf0f1',              // メインテキスト色
             textSecondary: '#bdc3c7',     // セカンダリテキスト色
             ui: '#34495e'                 // UI要素色
@@ -1276,6 +1279,11 @@ export class Game {
         this.floor++; // 階層を増やす
         this.audioManager.playSound('stairs');
         this.addMessage(loc.t('msg_descend_stairs', { floor: this.floor }), 'system');
+        
+        // Reset FOV and visible tiles for the new floor
+        this.fov = [];
+        this.visibleTiles.clear();
+
         this.generateDungeon();
         
         // Place player at start of new level
@@ -2106,7 +2114,7 @@ export class Game {
         this.traps.forEach(trap => {
             const worldX = trap.x;
             const worldY = trap.y;
-            if (this.visibleTiles.has(`${worldX},${worldY}`)) { // Only render if visible
+            if (trap.visible && this.visibleTiles.has(`${worldX},${worldY}`)) { // Only render if visible and trap is visible
                 const screenX = trap.x - cameraX;
                 const screenY = trap.y - cameraY;
                 if (screenX >= 0 && screenX < this.viewWidth && screenY >= 0 && screenY < this.viewHeight) {
@@ -2130,7 +2138,7 @@ export class Game {
         this.entities.forEach(entity => {
             const worldX = entity.x;
             const worldY = entity.y;
-            if (this.visibleTiles.has(`${worldX},${worldY}`)) { // Only render if visible
+            if (entity.alive && this.visibleTiles.has(`${worldX},${worldY}`)) { // Only render if visible and alive
                 const screenX = entity.x - cameraX;
                 const screenY = entity.y - cameraY;
                 if (screenX >= 0 && screenX < this.viewWidth && screenY >= 0 && screenY < this.viewHeight) {
@@ -2201,15 +2209,15 @@ export class Game {
         switch(tile) {
             case '#':
                 displayChar = '#';
-                color = dimmed ? this.colors.textSecondary : this.colors.wall;
+                color = dimmed ? this.colors.wallExplored : this.colors.wall; // Use new explored/visible colors
                 break;
             case '.':
                 displayChar = '.';
-                color = dimmed ? this.colors.textSecondary : this.colors.floor;
+                color = dimmed ? this.colors.floorExplored : this.colors.floor; // Use new explored/visible colors
                 break;
             case '%':
                 displayChar = '%';
-                color = dimmed ? this.colors.textSecondary : this.colors.stairs;
+                color = dimmed ? this.colors.stairsExplored : this.colors.stairs; // Use new explored/visible colors
                 break;
             default:
                 // For unknown tiles or background, fill with background color
