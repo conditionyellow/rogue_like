@@ -36,6 +36,7 @@ export class Game {
         this.commandHistory = [];
         this.commandHistoryIndex = -1;
         this.isCommandInputFocused = false; // コマンド入力がフォーカスされているか
+        this.waitingForInput = null; // 現在待機している入力の種類 (例: 'languageSelection')
 
         // ゲーム内の全魔法を定義
         this.spells = {
@@ -115,22 +116,6 @@ export class Game {
                 this.handleInput(e);
             }
         });
-        
-        // Audio controls
-        const volumeSlider = document.getElementById('volumeSlider');
-        const muteButton = document.getElementById('muteButton');
-        const volumeValue = document.getElementById('volumeValue');
-        
-        volumeSlider.addEventListener('input', (e) => {
-            const volume = e.target.value / 100;
-            this.audioManager.setVolume(volume);
-            volumeValue.textContent = `${e.target.value}%`;
-        });
-        
-        muteButton.addEventListener('click', () => {
-            const isMuted = this.audioManager.toggleMute();
-            muteButton.textContent = isMuted ? '🔇 Unmute' : '🔊 Mute';
-        });
     }
     
     handleInput(e) {
@@ -139,6 +124,19 @@ export class Game {
         // Initialize audio on first input
         if (!this.audioInitialized) {
             this.initializeAudio();
+        }
+
+        // 言語選択待機中の処理
+        if (this.waitingForInput === 'languageSelection') {
+            if (e.key === 'Escape') {
+                this.waitingForInput = null; // 言語選択モードをキャンセル
+                this.addMessage(loc.t('msg_language_selection_cancelled'), 'system'); // キャンセルメッセージ
+                // コマンド入力フィールドをクリアするなどの処理が必要であれば追加
+                this.commandInput.value = ''; // コマンド入力フィールドをクリア
+                this.isCommandInputFocused = false; // フォーカスを外す
+            }
+            e.preventDefault(); // 数字以外のキー入力を無視
+            return;
         }
         
         // インベントリUI表示中の処理
@@ -182,8 +180,51 @@ export class Game {
             return;
         }
         
-        // If no UI is active and it's not an Escape key, do nothing (movement and actions are now commands)
-        e.preventDefault();
+        // If no UI is active and it's not an Escape key, handle game actions
+        switch (e.key) {
+            case 'w':
+            case 'ArrowUp':
+                this.handleMovementCommand('n');
+                break;
+            case 's':
+            case 'ArrowDown':
+                this.handleMovementCommand('s');
+                break;
+            case 'a':
+            case 'ArrowLeft':
+                this.handleMovementCommand('w');
+                break;
+            case 'd':
+            case 'ArrowRight':
+                this.handleMovementCommand('e');
+                break;
+            case ' ': // Space
+                this.player.rest();
+                this.processTurn();
+                this.addMessage(loc.t('cmd_rest_success'), 'system');
+                break;
+            case 'g':
+                this.pickupItem();
+                break;
+            case 'i':
+                this.showInventoryUI();
+                break;
+            case 'u':
+                this.startItemSelection();
+                break;
+            case 'm':
+                this.startMagicSelection();
+                break;
+            case 'b':
+                this.interactWithMerchant();
+                break;
+            // E (装備表示) と R (装備除去) は、現在の実装ではコマンド入力が必要なため、ここでは直接処理しない
+            // 1-9 (アイテム/魔法の直接選択) は、itemSelectionMode/magicSelectionMode で処理されるため、ここでは直接処理しない
+            default:
+                // 未処理のキーはデフォルト動作を抑制しない
+                return;
+        }
+        e.preventDefault(); // 処理されたキーイベントのデフォルト動作を抑制
     }
 
     handleCommandInput(e) {
@@ -217,6 +258,16 @@ export class Game {
     }
 
     handleCommand(commandText) {
+        // If waiting for a specific input, handle it first
+        if (this.waitingForInput === 'languageSelection') {
+            this.processLanguageSelection(commandText);
+            return;
+        }
+        if (this.waitingForInput === 'audioVolumeSelection') {
+            this.processAudioVolumeSelection(commandText);
+            return;
+        }
+
         const parts = commandText.toLowerCase().split(' ');
         const command = parts[0];
         const args = parts.slice(1);
@@ -225,6 +276,9 @@ export class Game {
             case 'language':
             case 'lang':
                 this.handleLanguageCommand(args);
+                break;
+            case 'audio':
+                this.handleAudioCommand(args);
                 break;
             case 'move':
                 if (args.length > 0) {
@@ -302,11 +356,13 @@ export class Game {
     handleLanguageCommand(args) {
         if (args.length === 0) {
             this.addMessage(loc.t('cmd_lang_prompt'), 'system');
-            this.addMessage('1. English (en)', 'system');
-            this.addMessage('2. 日本語 (ja)', 'system');
+            this.addMessage('1. English', 'system'); // Removed (en)
+            this.addMessage('2. 日本語', 'system'); // Removed (ja)
+            this.waitingForInput = 'languageSelection'; // Set state to wait for selection
             return;
         }
 
+        // If arguments are provided directly, process them as before (e.g., "language en")
         const selection = args[0];
         if (selection === '1' || selection === 'en') {
             loc.setLanguage('en');
@@ -316,6 +372,78 @@ export class Game {
             this.addMessage(loc.t('cmd_lang_set', { lang: '日本語' }), 'system');
         } else {
             this.addMessage(loc.t('cmd_lang_invalid'), 'system');
+        }
+        this.waitingForInput = null; // Reset state
+    }
+
+    processLanguageSelection(selection) {
+        this.waitingForInput = null; // Reset state immediately
+
+        switch (selection.trim()) {
+            case '1':
+                loc.setLanguage('en');
+                this.addMessage(loc.t('cmd_lang_set', { lang: 'English' }), 'system');
+                break;
+            case '2':
+                loc.setLanguage('ja');
+                this.addMessage(loc.t('cmd_lang_set', { lang: '日本語' }), 'system');
+                break;
+            default:
+                this.addMessage(loc.t('cmd_lang_invalid'), 'system');
+                break;
+        }
+    }
+
+    handleAudioCommand(args) {
+        const subCommand = args[0];
+        const value = args[1];
+
+        if (!subCommand) {
+            this.addMessage(loc.t('cmd_audio_help'), 'system');
+            return;
+        }
+
+        switch (subCommand.toLowerCase()) {
+            case 'mute':
+                if (!this.audioManager.getMuteState()) {
+                    this.audioManager.toggleMute();
+                    this.addMessage(loc.t('cmd_audio_mute_on'), 'system');
+                } else {
+                    this.addMessage(loc.t('cmd_audio_already_muted'), 'system');
+                }
+                break;
+            case 'unmute':
+                if (this.audioManager.getMuteState()) {
+                    this.audioManager.toggleMute();
+                    this.addMessage(loc.t('cmd_audio_mute_off'), 'system');
+                } else {
+                    this.addMessage(loc.t('cmd_audio_already_unmuted'), 'system');
+                }
+                break;
+            case 'volume':
+                if (value === undefined) {
+                    this.addMessage(loc.t('cmd_audio_volume_current', { volume: Math.round(this.audioManager.masterVolume * 100) }), 'system');
+                    this.addMessage(loc.t('cmd_audio_volume_prompt'), 'system');
+                    this.waitingForInput = 'audioVolumeSelection';
+                } else {
+                    this.processAudioVolumeSelection(value);
+                }
+                break;
+            default:
+                this.addMessage(loc.t('cmd_audio_invalid_subcommand'), 'system');
+                break;
+        }
+    }
+
+    processAudioVolumeSelection(input) {
+        this.waitingForInput = null; // Reset state immediately
+
+        const volume = parseInt(input);
+        if (!isNaN(volume) && volume >= 0 && volume <= 100) {
+            this.audioManager.setVolume(volume / 100);
+            this.addMessage(loc.t('cmd_audio_volume_set', { volume: volume }), 'system');
+        } else {
+            this.addMessage(loc.t('cmd_audio_volume_invalid'), 'system');
         }
     }
 

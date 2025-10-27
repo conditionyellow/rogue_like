@@ -176,10 +176,21 @@
     "monster_name_yeti": "Yeti",
     "monster_name_dragon": "Dragon",
     "monster_name_jabberwock": "Jabberwock",
-    "cmd_help_message": "Available commands: help, language [en|ja|1|2]",
+    "cmd_help_message": "Available commands: help, language [en|ja|1|2], audio [mute|unmute|volume]",
     "cmd_help_list": "Type 'help' for a list of commands.",
     "cmd_unknown_command": "Unknown command: '{command}'. Type 'help' for a list of commands.",
     "cmd_lang_prompt": "Select language: 'language 1' for English, 'language 2' for Japanese.",
     "cmd_lang_set": "Language set to {lang}.",
-    "cmd_lang_invalid": "Invalid language selection. Please use 'language 1' or 'language 2'."
+    "cmd_lang_invalid": "Invalid language selection. Please use 'language 1' or 'language 2'.",
+    "msg_language_selection_cancelled": "Language selection cancelled.",
+    "cmd_audio_help": "Audio commands: 'audio mute', 'audio unmute', 'audio volume [0-100]'.",
+    "cmd_audio_mute_on": "Audio muted.",
+    "cmd_audio_mute_off": "Audio unmuted.",
+    "cmd_audio_already_muted": "Audio is already muted.",
+    "cmd_audio_already_unmuted": "Audio is already unmuted.",
+    "cmd_audio_volume_current": "Current volume: {volume}.",
+    "cmd_audio_volume_prompt": "Enter a volume value between 0 and 100.",
+    "cmd_audio_volume_set": "Volume set to {volume}.",
+    "cmd_audio_volume_invalid": "Invalid volume value. Please enter a number between 0 and 100.",
+    "cmd_audio_invalid_subcommand": "Invalid audio subcommand. Use 'audio help' for available commands."
 }

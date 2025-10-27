@@ -42,10 +42,9 @@
 
         #main-container {
             display: flex;
-            gap: 15px;
+            /* gap: 15px; */
             width: 100%;
-            max-width: 1400px;
-            height: calc(100vh - 60px);
+            max-width: 1200px; /* 280px (left) + 640px (center) + 280px (right) + 15px*2 (gap) = 1230px */
             justify-content: center;
         }
 
@@ -55,6 +54,7 @@
             gap: 15px;
             width: 280px;
             flex-shrink: 0;
+            height: 100%;
         }
 
         .panel {
@@ -76,6 +76,10 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            height: 100%;
+            flex: 1;
+            margin-left: 15px;
+            margin-right: 15px;
         }
 
         #gameCanvas {
@@ -83,14 +87,15 @@
             background-color: #000;
             image-rendering: pixelated;
             width: 640px;
-            height: 640px;
+            /* height: 640px; */
             flex-shrink: 0;
+            flex: 1;
         }
 
-        #stats-panel { flex: 0 1 auto; }
-        #messages-panel { flex: 1 1 auto; min-height: 0; }
+        #stats-panel { flex: 1; }
+        #messages-panel { flex: 1; }
         #inventory-panel { flex: 1 1 auto; min-height: 0; }
-        #controls-panel { flex: 0 1 auto; }
+        #controls-panel { flex: 1; }
 
         .stat-bar {
             margin: 8px 0;
@@ -194,33 +199,20 @@
                 <div>Dexterity: <span id="playerDexterity">10</span></div>
                 <div>Gold: <span id="playerGold">0</span></div>
             </div>
-            <div id="guide-panel" class="panel">
-                <h3 data-i18n-key="ui_guide_title">How to Play</h3>
-                <div class="guide-list">
-                    <p><strong data-i18n-key="guide_commands_title">Commands:</strong></p>
-                    <p data-i18n-key="guide_help_command">help: Show available commands</p>
-                    <p data-i18n-key="guide_lang_command">language [en|ja|1|2]: Change language</p>
-                    <p><strong data-i18n-key="guide_movement_title">Movement:</strong></p>
-                    <p data-i18n-key="guide_move_command">move [n|s|e|w|ne|nw|se|sw]: Move player</p>
-                    <p data-i18n-key="guide_rest_command">rest: Wait/Rest (HP/MP recovery)</p>
-
-                    <p><strong data-i18n-key="guide_items_title">Items:</strong></p>
-                    <p data-i18n-key="guide_get_command">get: Pick up item</p>
-                    <p data-i18n-key="guide_inventory_command">inventory: Open Inventory UI</p>
-                    <p data-i18n-key="guide_use_command">use [index|name]: Use item</p>
-                    <p data-i18n-key="guide_equip_command">equip [index|name]: Equip item</p>
-                    <p data-i18n-key="guide_unequip_command">unequip [slot]: Unequip item (weapon, armor, shield)</p>
-
-                    <p><strong data-i18n-key="guide_magic_title">Magic:</strong></p>
-                    <p data-i18n-key="guide_magic_command">magic: Open Magic selection</p>
-
-                    <p><strong data-i18n-key="guide_shop_title">Shop:</strong></p>
-                    <p data-i18n-key="guide_shop_command">shop: Interact with Merchant</p>
-
-                    <p><strong data-i18n-key="guide_game_title">Game:</strong></p>
-                    <p data-i18n-key="guide_save_command">save: Save Game</p>
-                    <p data-i18n-key="guide_load_command">load: Load Game</p>
-                    <p data-i18n-key="guide_cancel_close">ESC: Cancel/Close UI</p>
+            <div id="controls-panel" class="panel">
+                <h3 data-i18n-key="ui_controls_title">Controls</h3>
+                <div class="controls-list">
+                    WASD/Arrows: Move<br>
+                    Space: Rest (HP/MP recovery)<br>
+                    G: Pick up item<br>
+                    I: Inventory UI<br>
+                    U: Use item (select)<br>
+                    M: Cast Magic<br>
+                    B: Interact with Merchant<br>
+                    1-9: Item/Spell (direct)<br>
+                    E: Equip<br>
+                    R: Unequip<br>
+                    ESC: Cancel/Close UI
                 </div>
             </div>
         </div>
@@ -234,25 +226,6 @@
                 <h3 data-i18n-key="ui_messages_title">Messages</h3>
                 <div id="messages"></div>
                 <input type="text" id="commandInput" placeholder="Enter command..." style="width: 100%; padding: 5px; margin-top: 10px; background-color: #34495e; border: 1px solid #7f8c8d; color: #ecf0f1; font-family: var(--font-family);">
-            </div>
-            <div id="controls-panel" class="panel">
-                <h3 data-i18n-key="ui_controls_title">Controls</h3>
-                <div class="controls-list">
-                    WASD/Arrows: Move<br>
-                    Space: Wait/Rest<br>
-                    I: Inventory UI<br>
-                    M: Cast Magic<br>
-                    G: Get item<br>
-                    U: Use item (select)<br>
-                    1-9: Use item (direct)<br>
-                    E/R: Equip/Remove
-                </div>
-                <h3 data-i18n-key="ui_audio_title" style="margin-top: 15px;">Audio</h3>
-                <div>
-                    <label for="volumeSlider">Volume: <span id="volumeValue">70%</span></label>
-                    <input type="range" id="volumeSlider" min="0" max="100" value="70">
-                    <button id="muteButton" style="margin-top: 5px;">🔊 Mute</button>
-                </div>
             </div>
         </div>
 
@@ -271,10 +244,6 @@
             const game = new Game();
             loc.setGame(game); // locにgameインスタンスを渡す
             await game.init(); // gameの初期化を待つ
-
-            // Language switcher events
-            document.getElementById('lang-en').addEventListener('click', () => loc.setLanguage('en'));
-            document.getElementById('lang-ja').addEventListener('click', () => loc.setLanguage('ja'));
         });
     </script>
 </body>

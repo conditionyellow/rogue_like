@@ -176,10 +176,21 @@
     "monster_name_yeti": "イエティ",
     "monster_name_dragon": "ドラゴン",
     "monster_name_jabberwock": "ジャバウォック",
-    "cmd_help_message": "利用可能なコマンド: help, language [en|ja|1|2]",
+    "cmd_help_message": "利用可能なコマンド: help, language [en|ja|1|2], audio [mute|unmute|volume]",
     "cmd_help_list": "コマンドリストを表示するには 'help' と入力してください。",
     "cmd_unknown_command": "不明なコマンド: '{command}'。コマンドリストを表示するには 'help' と入力してください。",
     "cmd_lang_prompt": "言語を選択: 英語は 'language 1'、日本語は 'language 2' と入力してください。",
     "cmd_lang_set": "言語を{lang}に設定しました。",
-    "cmd_lang_invalid": "無効な言語選択です。'language 1' または 'language 2' を使用してください。"
+    "cmd_lang_invalid": "無効な言語選択です。'language 1' または 'language 2' を使用してください。",
+    "msg_language_selection_cancelled": "言語選択をキャンセルしました。",
+    "cmd_audio_help": "オーディオコマンド: 'audio mute', 'audio unmute', 'audio volume [0-100]'.",
+    "cmd_audio_mute_on": "オーディオをミュートしました。",
+    "cmd_audio_mute_off": "オーディオのミュートを解除しました。",
+    "cmd_audio_already_muted": "オーディオはすでにミュートされています。",
+    "cmd_audio_already_unmuted": "オーディオはすでにミュート解除されています。",
+    "cmd_audio_volume_current": "現在のボリューム: {volume}。",
+    "cmd_audio_volume_prompt": "ボリュームを0から100の数字で入力してください。",
+    "cmd_audio_volume_set": "ボリュームを{volume}に設定しました。",
+    "cmd_audio_volume_invalid": "無効なボリューム値です。0から100の数字を入力してください。",
+    "cmd_audio_invalid_subcommand": "無効なオーディオコマンドです。'audio help' で利用可能なコマンドを確認してください。"
 }
