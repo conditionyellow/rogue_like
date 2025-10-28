@@ -29,8 +29,8 @@
         body {
             display: flex;
             flex-direction: column;
-            align-items: center;
             padding: 10px;
+            padding-bottom: 0; /* 画面下部の余白をなくす */
         }
 
         h1 {
@@ -46,6 +46,9 @@
             width: 100%;
             max-width: 1200px;
             justify-content: center;
+            flex: 1; /* 高さをbodyの残りに合わせる */
+            min-height: 0; /* flexアイテムの縮小を許可 */
+            margin: 0 auto; /* 水平中央揃え */
         }
 
         #right-panel {
@@ -54,7 +57,6 @@
             gap: 15px;
             width: 280px;
             flex-shrink: 0;
-            height: 100%;
         }
 
         .panel {
@@ -75,10 +77,9 @@
         #center-panel {
             display: flex;
             flex-direction: column;
-            align-items: center;
             height: 100%;
             flex: 1;
-            margin-right: 15px;
+            min-width: 0; /* flexアイテムの縮小を許可 */
         }
 
         #gameCanvas {
@@ -87,8 +88,6 @@
             image-rendering: pixelated;
             width: 100%;
             height: 100%;
-            flex-shrink: 0;
-            flex: 1;
         }
 
         #messages-panel { flex: 1; }

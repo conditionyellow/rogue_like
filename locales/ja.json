@@ -187,5 +187,11 @@
     "cmd_audio_volume_prompt": "ボリュームを0から100の数字で入力してください。",
     "cmd_audio_volume_set": "ボリュームを{volume}に設定しました。",
     "cmd_audio_volume_invalid": "無効なボリューム値です。0から100の数字を入力してください。",
-    "cmd_audio_invalid_subcommand": "無効なオーディオコマンドです。'audio help' で利用可能なコマンドを確認してください。"
+    "cmd_audio_invalid_subcommand": "無効なオーディオコマンドです。'audio help' で利用可能なコマンドを確認してください。",
+    "msg_item_selected": "選択中: {item_name}",
+    "action_use": "使う",
+    "action_equip": "装備する",
+    "action_drop": "捨てる",
+    "msg_action_selection_prompt": "アクションを選択 (1-2) 、ESCで戻る。",
+    "msg_action_selection_cancelled": "アクション選択をキャンセルしました。"
 }

@@ -30,6 +30,7 @@ export class Game {
         this.traps = []; // ダンジョン内の罠を管理
         this.shopInventory = []; // ショップの商品リスト
         this.shopRoom = null; // ショップ部屋の参照
+        this.selectedItem = null; // インベントリで選択中のアイテム
 
         // コマンド入力関連
         this.commandInput = null; // 後で初期化
@@ -126,28 +127,33 @@ export class Game {
     
     handleInput(e) {
         if (this.gameState === 'dead') return;
-        
+
         // Initialize audio on first input
         if (!this.audioInitialized) {
             this.initializeAudio();
         }
 
+        // --- Game State Based Input Handling ---
+
+        if (this.gameState === 'inventory_list') {
+            this.handleInventoryListInput(e);
+            return;
+        }
+
+        if (this.gameState === 'inventory_action') {
+            this.handleInventoryActionInput(e);
+            return;
+        }
+
         // 言語選択待機中の処理
         if (this.waitingForInput === 'languageSelection') {
             if (e.key === 'Escape') {
-                this.waitingForInput = null; // 言語選択モードをキャンセル
-                this.addMessage(loc.t('msg_language_selection_cancelled'), 'system'); // キャンセルメッセージ
-                // コマンド入力フィールドをクリアするなどの処理が必要であれば追加
-                this.commandInput.value = ''; // コマンド入力フィールドをクリア
-                this.isCommandInputFocused = false; // フォーカスを外す
+                this.waitingForInput = null;
+                this.addMessage(loc.t('msg_language_selection_cancelled'), 'system');
+                this.commandInput.value = '';
+                this.isCommandInputFocused = false;
             }
-            e.preventDefault(); // 数字以外のキー入力を無視
-            return;
-        }
-        
-        // インベントリUI表示中の処理
-        if (this.inventoryUIActive) {
-            this.handleInventoryInput(e);
+            e.preventDefault();
             return;
         }
 
@@ -156,28 +162,17 @@ export class Game {
             this.handleShopInput(e);
             return;
         }
-        
-        // アイテム選択モードの処理
-        if (this.itemSelectionMode) {
-            this.handleItemSelection(e);
-            return;
-        }
 
         // 魔法選択モードの処理
         if (this.magicSelectionMode) {
             this.handleMagicSelection(e);
             return;
         }
-        
+
         // Handle UI closing with Escape key
         if (e.key === 'Escape') {
-            if (this.inventoryUIActive) {
-                this.hideInventoryUI();
-            } else if (this.shopUIActive) {
+            if (this.shopUIActive) {
                 this.hideShopUI();
-            } else if (this.itemSelectionMode) {
-                this.itemSelectionMode = false;
-                this.addMessage(loc.t('msg_item_selection_cancelled'), 'system');
             } else if (this.magicSelectionMode) {
                 this.magicSelectionMode = false;
                 this.addMessage(loc.t('msg_spell_selection_cancelled'), 'system');
@@ -185,55 +180,162 @@ export class Game {
             e.preventDefault();
             return;
         }
-        
-        // If no UI is active and it's not an Escape key, handle game actions
-        switch (e.key) {
-            case 'w':
-            case 'ArrowUp':
-                this.handleMovementCommand('n');
-                break;
-            case 's':
-            case 'ArrowDown':
-                this.handleMovementCommand('s');
-                break;
-            case 'a':
-            case 'ArrowLeft':
-                this.handleMovementCommand('w');
-                break;
-            case 'd':
-            case 'ArrowRight':
-                this.handleMovementCommand('e');
-                break;
-            case ' ': // Space
-                this.player.rest();
-                this.processTurn();
-                this.addMessage(loc.t('cmd_rest_success'), 'system');
-                break;
-            case 'g':
-                this.pickupItem();
-                break;
-            case 'i':
-                this.showInventoryUI();
-                break;
-            case 'u':
-                this.startItemSelection();
-                break;
-            case 'm':
-                this.startMagicSelection();
-                break;
-            case 'b':
-                this.interactWithMerchant();
-                break;
-            case '?':
-                this.showHelp();
-                break;
-            // E (装備表示) と R (装備除去) は、現在の実装ではコマンド入力が必要なため、ここでは直接処理しない
-            // 1-9 (アイテム/魔法の直接選択) は、itemSelectionMode/magicSelectionMode で処理されるため、ここでは直接処理しない
-            default:
-                // 未処理のキーはデフォルト動作を抑制しない
-                return;
+
+        // --- Default 'playing' state actions ---
+        if (this.gameState === 'playing') {
+            switch (e.key) {
+                case 'w':
+                case 'ArrowUp':
+                    this.handleMovementCommand('n');
+                    break;
+                case 's':
+                case 'ArrowDown':
+                    this.handleMovementCommand('s');
+                    break;
+                case 'a':
+                case 'ArrowLeft':
+                    this.handleMovementCommand('w');
+                    break;
+                case 'd':
+                case 'ArrowRight':
+                    this.handleMovementCommand('e');
+                    break;
+                case ' ': // Space
+                    this.player.rest();
+                    this.processTurn();
+                    this.addMessage(loc.t('cmd_rest_success'), 'system');
+                    break;
+                case 'g':
+                    this.pickupItem();
+                    break;
+                case 'i':
+                    this.enterInventoryMode();
+                    break;
+                case 'u': // Kept for compatibility, but 'i' is the new main way
+                    this.enterInventoryMode();
+                    break;
+                case 'm':
+                    this.startMagicSelection();
+                    break;
+                case 'b':
+                    this.interactWithMerchant();
+                    break;
+                case '?':
+                    this.showHelp();
+                    break;
+                default:
+                    return; // Do not prevent default for unhandled keys
+            }
+            e.preventDefault();
         }
-        e.preventDefault(); // 処理されたキーイベントのデフォルト動作を抑制
+    }
+
+    // --- New Inventory Methods ---
+
+    enterInventoryMode() {
+        if (this.player.inventory.length === 0) {
+            this.addMessage(loc.t('msg_inventory_empty'), 'system');
+            return;
+        }
+        this.gameState = 'inventory_list';
+        this.addMessage(loc.t('msg_inventory_title'), 'system');
+        this.player.inventory.forEach((item, index) => {
+            this.addMessage(`${index + 1}: ${item.name}`, 'item');
+        });
+        this.addMessage(loc.t('msg_item_selection_prompt'), 'system');
+    }
+
+    handleInventoryListInput(e) {
+        if (e.key === 'Escape') {
+            this.gameState = 'playing';
+            this.addMessage(loc.t('msg_item_selection_cancelled'), 'system');
+            e.preventDefault();
+            return;
+        }
+
+        const index = parseInt(e.key) - 1;
+        if (index >= 0 && index < this.player.inventory.length) {
+            this.selectedItem = this.player.inventory[index];
+            this.gameState = 'inventory_action';
+            this.displayItemActions();
+        } else {
+            // Optional: Add a message for invalid number
+        }
+        e.preventDefault();
+    }
+
+    displayItemActions() {
+        const item = this.selectedItem;
+        this.addMessage(loc.t('msg_item_selected', { item_name: item.name }), 'system');
+        
+        let actions = [];
+        if (item.type === 'potion') {
+            actions.push('1: ' + loc.t('action_use'));
+        } else if (item.type === 'weapon' || item.type === 'armor' || item.type === 'shield') {
+            actions.push('1: ' + loc.t('action_equip'));
+        }
+        actions.push('2: ' + loc.t('action_drop'));
+
+        actions.forEach(action => this.addMessage(action, 'system'));
+        this.addMessage(loc.t('msg_action_selection_prompt'), 'system');
+    }
+
+    handleInventoryActionInput(e) {
+        const item = this.selectedItem;
+        if (!item) { // Safety check
+            this.gameState = 'playing';
+            return;
+        }
+
+        if (e.key === 'Escape') {
+            this.enterInventoryMode(); // Go back to the list view
+            e.preventDefault();
+            return;
+        }
+
+        let actionTaken = false;
+        if (item.type === 'potion') {
+            if (e.key === '1') { // Use
+                this.useItemByRef(item);
+                actionTaken = true;
+            }
+        } else if (item.type === 'weapon' || item.type === 'armor' || item.type === 'shield') {
+            if (e.key === '1') { // Equip
+                this.equipItem(item);
+                actionTaken = true;
+            }
+        }
+
+        if (e.key === '2') { // Drop
+            this.dropItemByRef(item);
+            actionTaken = true;
+        }
+
+        if (actionTaken) {
+            this.gameState = 'playing';
+            this.selectedItem = null;
+        }
+        // If no valid action key was pressed, do nothing and wait.
+        e.preventDefault();
+    }
+
+    dropItemByRef(itemToDrop) {
+        const index = this.player.inventory.findIndex(item => item.id === itemToDrop.id);
+        if (index !== -1) {
+            const item = this.player.inventory[index];
+            const droppedItem = { ...item, x: this.player.x, y: this.player.y, id: this.nextItemId++ };
+            this.items.push(droppedItem);
+            this.removeItemFromInventory(item.id);
+            this.addMessage(loc.t('msg_drop_item', { item_name: item.name }), 'item');
+            this.processTurn(); // ターンを進める
+        }
+    }
+
+    useItemByRef(itemToUse) {
+        const index = this.player.inventory.findIndex(item => item.id === itemToUse.id);
+        if (index !== -1) {
+            this.useItemByIndex(index);
+        }
     }
 
     showHelp() {
@@ -322,7 +424,7 @@ export class Game {
                 break;
             case 'inventory':
             case 'i':
-                this.showInventoryUI();
+                this.enterInventoryMode();
                 break;
             case 'use':
                 if (args.length > 0) {
@@ -1304,82 +1406,7 @@ export class Game {
         }
     }
     
-    useItem() {
-        // ポーションを最優先で使用
-        const potion = this.player.inventory.find(item => item.type === 'potion');
-        if (potion) {
-            if (potion.effect === 'heal') {
-                this.player.hp = Math.min(this.player.maxHp, this.player.hp + potion.value);
-                this.addMessage(loc.t('msg_drink_hp_potion', { potion_name: potion.name, value: potion.value }), 'item');
-            } else if (potion.effect === 'mana') {
-                this.player.mp = Math.min(this.player.maxMp, this.player.mp + potion.value);
-                this.addMessage(loc.t('msg_drink_mp_potion', { potion_name: potion.name, value: potion.value }), 'item');
-            }
-            
-            this.removeItemFromInventory(potion.id);
-            this.processTurn();
-            return;
-        }
-        
-        // ポーションがない場合は装備アイテムを装備
-        const equipableItem = this.player.inventory.find(item => 
-            item.type === 'weapon' || item.type === 'armor'
-        );
-        
-        if (equipableItem) {
-            this.equipItem(equipableItem);
-        } else {
-            this.addMessage(loc.t('msg_no_usable_items'), 'system');
-        }
-    }
     
-    // 新しいアイテム選択システム
-    startItemSelection() {
-        if (this.player.inventory.length === 0) {
-            this.addMessage(loc.t('msg_inventory_empty'), 'system');
-            return;
-        }
-        
-        this.itemSelectionMode = true;
-        this.addMessage(loc.t('msg_select_item_to_use'), 'system');
-        
-        this.player.inventory.forEach((item, index) => {
-            const keyNumber = index + 1;
-            let description = `${keyNumber}: ${item.symbol} ${item.name}`;
-            
-            if (item.type === 'potion') {
-                description += ` (${item.effect === 'heal' ? 'HP' : 'MP'} +${item.value})`;
-            } else if (item.type === 'weapon') {
-                description += ` (Attack +${item.attack})`;
-            } else if (item.type === 'armor') {
-                description += ` (Defense +${item.defense})`;
-            }
-            
-            this.addMessage(description, 'item');
-        });
-        
-        this.addMessage(loc.t('msg_item_selection_prompt'), 'system');
-    }
-    
-    handleItemSelection(e) {
-        const key = e.key.toLowerCase();
-        
-        if (key === 'escape') {
-            this.itemSelectionMode = false;
-            this.addMessage(loc.t('msg_item_selection_cancelled'), 'system');
-            e.preventDefault();
-            return;
-        }
-        
-        // 数字キーの処理
-        if (key >= '1' && key <= '9') {
-            const index = parseInt(key) - 1;
-            this.useItemByIndex(index);
-            this.itemSelectionMode = false;
-        }
-        
-        e.preventDefault();
-    }
     
     useItemByIndex(index) {
         if (index < 0 || index >= this.player.inventory.length) {
@@ -1659,344 +1686,7 @@ export class Game {
         }
     }
     
-    // === 新しいインベントリUIシステム ===
-    
-    showInventoryUI() {
-        this.inventoryUIActive = true;
-        this.createInventoryUI();
-    }
-    
-    hideInventoryUI() {
-        this.inventoryUIActive = false;
-        this.removeInventoryUI();
-    }
-    
-    createInventoryUI() {
-        // 既存のインベントリUIがあれば削除
-        this.removeInventoryUI();
-        
-        // オーバーレイ背景を作成
-        const overlay = document.createElement('div');
-        overlay.id = 'inventoryOverlay';
-        overlay.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.8);
-            z-index: 1000;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        `;
-        
-        // インベントリウィンドウを作成
-        const inventoryWindow = document.createElement('div');
-        inventoryWindow.id = 'inventoryWindow';
-        inventoryWindow.style.cssText = `
-            background-color: #FFFFFF;
-            border: 3px solid #000000;
-            padding: 20px;
-            max-width: 600px;
-            max-height: 80vh;
-            overflow-y: auto;
-            font-family: 'Courier New', monospace;
-            color: #000000;
-        `;
-        
-        // ヘッダー
-        const header = document.createElement('div');
-        header.style.cssText = `
-            text-align: center;
-            font-size: 18px;
-            font-weight: bold;
-            margin-bottom: 15px;
-            border-bottom: 2px solid #000000;
-            padding-bottom: 10px;
-        `;
-        header.textContent = loc.t('ui_inventory_title_full');
-        inventoryWindow.appendChild(header);
-        
-        // インベントリ内容
-        if (this.player.inventory.length === 0) {
-            const emptyMsg = document.createElement('div');
-            emptyMsg.style.cssText = `
-                text-align: center;
-                color: #666666;
-                padding: 20px;
-                font-style: italic;
-            `;
-            emptyMsg.textContent = loc.t('ui_inventory_empty_msg');
-            inventoryWindow.appendChild(emptyMsg);
-        } else {
-            this.player.inventory.forEach((item, index) => {
-                const itemElement = this.createInventoryItemElement(item, index);
-                inventoryWindow.appendChild(itemElement);
-            });
-        }
-        
-        // 操作案内
-        const controls = document.createElement('div');
-        controls.style.cssText = `
-            margin-top: 15px;
-            padding-top: 10px;
-            border-top: 1px solid #333333;
-            font-size: 12px;
-            color: #666666;
-            text-align: center;
-        `;
-        controls.innerHTML = `
-            <strong>${loc.t('ui_inventory_controls_title')}</strong><br>
-            ${loc.t('ui_inventory_controls_desc')}<br>
-            ${loc.t('ui_inventory_controls_direct')}
-        `;
-        inventoryWindow.appendChild(controls);
-        
-        overlay.appendChild(inventoryWindow);
-        document.body.appendChild(overlay);
-        
-        // ESCキーでクローズできるようにイベントリスナーを追加
-        overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) {
-                this.hideInventoryUI();
-            }
-        });
-    }
-    
-    createInventoryItemElement(item, index) {
-        const itemDiv = document.createElement('div');
-        
-        // 装備中のアイテムかチェック
-        const isEquipped = (this.player.equipment.weapon && this.player.equipment.weapon.id === item.id) ||
-                          (this.player.equipment.armor && this.player.equipment.armor.id === item.id) ||
-                          (this.player.equipment.shield && this.player.equipment.shield.id === item.id);
-        
-        itemDiv.style.cssText = `
-            display: flex;
-            align-items: center;
-            padding: 8px;
-            margin: 5px 0;
-            border: ${isEquipped ? '2px solid #000000' : '1px solid #333333'};
-            background-color: ${isEquipped ? '#F5F5F5' : '#FFFFFF'};
-            cursor: pointer;
-            transition: background-color 0.2s;
-        `;
-        
-        // ホバー効果
-        itemDiv.addEventListener('mouseenter', () => {
-            itemDiv.style.backgroundColor = isEquipped ? '#EEEEEE' : '#F0F0F0';
-        });
-        itemDiv.addEventListener('mouseleave', () => {
-            itemDiv.style.backgroundColor = isEquipped ? '#F5F5F5' : '#FFFFFF';
-        });
-        
-        // アイテムアイコン
-        const icon = document.createElement('span');
-        icon.style.cssText = `
-            font-size: 16px;
-            font-weight: bold;
-            width: 30px;
-            text-align: center;
-            margin-right: 10px;
-            color: ${item.color};
-        `;
-        icon.textContent = item.symbol;
-        
-        // アイテム情報
-        const info = document.createElement('div');
-        info.style.cssText = `
-            flex: 1;
-        `;
-        
-        const name = document.createElement('div');
-        name.style.cssText = `
-            font-weight: bold;
-            font-size: 14px;
-        `;
-        name.textContent = `${index + 1}. ${item.name}${isEquipped ? loc.t('ui_equipped_tag') : ''}`;
-        
-        const description = document.createElement('div');
-        description.style.cssText = `
-            font-size: 12px;
-            color: #666666;
-            margin-top: 2px;
-        `;
-        
-        let descText = '';
-        if (item.type === 'potion') {
-            descText = item.effect === 'heal' ? loc.t('ui_hp_recovery', { value: item.value }) : loc.t('ui_mp_recovery', { value: item.value });
-        } else if (item.type === 'weapon') {
-            descText = loc.t('ui_attack_power', { value: item.attack });
-        } else if (item.type === 'armor') {
-            descText = loc.t('ui_defense_power', { value: item.defense });
-        } else if (item.type === 'shield') { // Add shield description
-            descText = loc.t('ui_defense_power', { value: item.defense });
-        }
-        description.textContent = descText;
-        
-        info.appendChild(name);
-        info.appendChild(description);
-        
-        // アクションボタン
-        const actions = document.createElement('div');
-        actions.style.cssText = `
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        `;
-        
-        if (item.type === 'potion') {
-            // ポーションの場合は使用制限をチェック
-            let canUse = true;
-            let useText = loc.t('ui_use_button');
-            
-            if (item.effect === 'heal' && this.player.hp >= this.player.maxHp) {
-                canUse = false;
-                useText = loc.t('ui_hp_full_button');
-            } else if (item.effect === 'mana' && this.player.mp >= this.player.maxMp) {
-                canUse = false;
-                useText = loc.t('ui_mp_full_button');
-            }
-            
-            const useBtn = this.createActionButton(useText, canUse ? '#000000' : '#999999', () => {
-                if (canUse) {
-                    this.useItemByIndex(index);
-                    this.updateInventoryUI();
-                }
-            });
-            if (!canUse) {
-                useBtn.style.cursor = 'not-allowed';
-            }
-            actions.appendChild(useBtn);
-            
-        } else if (item.type === 'weapon' || item.type === 'armor' || item.type === 'shield') { // Add shield
-            if (isEquipped) {
-                const unequipBtn = this.createActionButton(loc.t('ui_unequip_button'), '#666666', () => {
-                    let slot;
-                    if (item.type === 'weapon') slot = 'weapon';
-                    else if (item.type === 'armor') slot = 'armor';
-                    else if (item.type === 'shield') slot = 'shield'; // Determine slot for shield
-                    this.unequipItem(slot);
-                    this.updateInventoryUI();
-                });
-                actions.appendChild(unequipBtn);
-            } else {
-                const equipBtn = this.createActionButton(loc.t('ui_equip_button'), '#000000', () => {
-                    this.equipItem(item);
-                    this.updateInventoryUI();
-                });
-                actions.appendChild(equipBtn);
-            }
-        }
-        
-        const dropBtn = this.createActionButton(loc.t('ui_drop_button'), '#999999', () => {
-            this.dropItem(index);
-            this.updateInventoryUI();
-        });
-        actions.appendChild(dropBtn);
-        
-        itemDiv.appendChild(icon);
-        itemDiv.appendChild(info);
-        itemDiv.appendChild(actions);
-        
-        // アイテムクリックで使用/装備（装備中でない場合のみ）
-        itemDiv.addEventListener('click', (e) => {
-            if (e.target.tagName !== 'BUTTON') {
-                if (item.type === 'potion') {
-                    this.useItemByIndex(index);
-                } else if ((item.type === 'weapon' || item.type === 'armor' || item.type === 'shield') && !isEquipped) { // Add shield
-                    this.equipItem(item);
-                }
-                this.updateInventoryUI();
-            }
-        });
-        
-        return itemDiv;
-    }
-    
-    createActionButton(text, color, onClick) {
-        const button = document.createElement('button');
-        button.style.cssText = `
-            background-color: ${color};
-            color: #FFFFFF;
-            border: none;
-            padding: 4px 8px;
-            font-size: 10px;
-            font-family: 'Courier New', monospace;
-            cursor: pointer;
-            min-width: 50px;
-        `;
-        button.textContent = text;
-        button.addEventListener('click', (e) => {
-            e.stopPropagation();
-            onClick();
-        });
-        button.addEventListener('mouseenter', () => {
-            button.style.opacity = '0.8';
-        });
-        button.addEventListener('mouseleave', () => {
-            button.style.opacity = '1';
-        });
-        return button;
-    }
-    
-    updateInventoryUI() {
-        if (this.inventoryUIActive) {
-            this.createInventoryUI(); // 再作成して更新
-        }
-    }
-    
-    removeInventoryUI() {
-        const overlay = document.getElementById('inventoryOverlay');
-        if (overlay) {
-            overlay.remove();
-        }
-    }
-    
-    handleInventoryInput(e) {
-        const key = e.key.toLowerCase();
-        
-        if (key === 'escape' || key === 'i') {
-            this.hideInventoryUI();
-        } else if (key >= '1' && key <= '9') {
-            const index = parseInt(key) - 1;
-            if (index < this.player.inventory.length) {
-                const item = this.player.inventory[index];
-                if (item.type === 'potion') {
-                    this.useItemByIndex(index);
-                } else if (item.type === 'weapon' || item.type === 'armor' || item.type === 'shield') { // Add shield
-                    this.equipItem(item);
-                }
-                this.updateInventoryUI();
-            }
-        }
-        
-        e.preventDefault();
-    }
-    
-    dropItem(index) {
-        if (index < 0 || index >= this.player.inventory.length) {
-            return;
-        }
-        
-        const item = this.player.inventory[index];
-        
-        // アイテムをプレイヤーの足元に配置
-        const droppedItem = {
-            ...item,
-            x: this.player.x,
-            y: this.player.y,
-            id: this.nextItemId++
-        };
-        
-        this.items.push(droppedItem);
-        this.removeItemFromInventory(item.id);
-        this.addMessage(loc.t('msg_drop_item', { item_name: item.name }), 'item');
-    }
-
-    // ===== ショップシステム =====
-
+    // Simple inventory display in messages (旧来のメソッド - 後方互換性のために残す)
     interactWithMerchant() {
         // Check for adjacent merchant
         let merchant = null;
@@ -2381,7 +2071,7 @@ export class Game {
         const messageLog = document.getElementById('messages');
         if (messageLog) {
             messageLog.innerHTML = '';
-            this.messages.slice(-10).forEach(msg => {
+            this.messages.slice(-20).forEach(msg => {
                 const msgElement = document.createElement('div');
                 msgElement.textContent = msg.text;
                 msgElement.classList.add('message', `message-${msg.type}`);
@@ -2480,21 +2170,21 @@ export class Game {
 
         const p = this.player;
         const level = `Level: ${p.level}`;
-        const hp = `HP: ${p.hp}(${p.maxHp})`; // "Hits" -> "HP"
-        const mp = `MP: ${p.mp}(${p.maxMp})`; // MPを追加
+        const hp = `HP: ${p.hp}(${p.maxHp})`;
+        const mp = `MP: ${p.mp}(${p.maxMp})`;
         const str = `Str: ${p.attack}`;
-        const gold = `Gold: ${p.gold}`;
         const armor = `Armor: ${p.defense}`;
+        const gold = `Gold: ${p.gold}`;
         const exp = `Exp: ${p.experience}`;
         const floor = `Floor: ${this.floor}`;
 
         const stats = [
             level,
             hp,
-            mp, // MPを追加
+            mp,
             str,
-            gold,
             armor,
+            gold,
             exp,
             floor
         ];

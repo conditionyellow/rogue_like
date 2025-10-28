@@ -187,5 +187,11 @@
     "cmd_audio_volume_prompt": "Enter a volume value between 0 and 100.",
     "cmd_audio_volume_set": "Volume set to {volume}.",
     "cmd_audio_volume_invalid": "Invalid volume value. Please enter a number between 0 and 100.",
-    "cmd_audio_invalid_subcommand": "Invalid audio subcommand. Use 'audio help' for available commands."
+    "cmd_audio_invalid_subcommand": "Invalid audio subcommand. Use 'audio help' for available commands.",
+    "msg_item_selected": "Selected: {item_name}",
+    "action_use": "Use",
+    "action_equip": "Equip",
+    "action_drop": "Drop",
+    "msg_action_selection_prompt": "Select action (1-2) or ESC to go back.",
+    "msg_action_selection_cancelled": "Action selection cancelled."
 }
