@@ -77,6 +77,12 @@ export class Game {
     }
     
     async init() {
+        const style = window.getComputedStyle(this.canvas);
+        this.canvas.width = parseInt(style.width, 10);
+        this.canvas.height = parseInt(style.height, 10);
+        this.viewWidth = this.canvas.width / this.tileSize;
+        this.viewHeight = this.canvas.height / this.tileSize;
+
         this.setupEventListeners();
         this.generateDungeon();
         this.createPlayer();
@@ -218,6 +224,9 @@ export class Game {
             case 'b':
                 this.interactWithMerchant();
                 break;
+            case '?':
+                this.showHelp();
+                break;
             // E (装備表示) と R (装備除去) は、現在の実装ではコマンド入力が必要なため、ここでは直接処理しない
             // 1-9 (アイテム/魔法の直接選択) は、itemSelectionMode/magicSelectionMode で処理されるため、ここでは直接処理しない
             default:
@@ -225,6 +234,16 @@ export class Game {
                 return;
         }
         e.preventDefault(); // 処理されたキーイベントのデフォルト動作を抑制
+    }
+
+    showHelp() {
+        this.addMessage(loc.t('help_title'), 'system');
+        const helpKeys = [
+            'help_move', 'help_rest', 'help_get', 'help_inventory', 'help_use',
+            'help_magic', 'help_merchant', 'help_direct_select', 'help_equip',
+            'help_unequip', 'help_cancel', 'help_show'
+        ];
+        helpKeys.forEach(key => this.addMessage(loc.t(key), 'system'));
     }
 
     handleCommandInput(e) {
@@ -2358,27 +2377,18 @@ export class Game {
     }
     
     updateUI() {
-        // Update player stats
-        document.getElementById('playerLevel').textContent = this.player.level;
-        document.getElementById('playerHP').textContent = this.player.hp;
-        document.getElementById('playerMaxHP').textContent = this.player.maxHp;
-        document.getElementById('playerMP').textContent = this.player.mp;
-        document.getElementById('playerMaxMP').textContent = this.player.maxMp;
-        document.getElementById('playerAttack').textContent = this.player.attack;
-        document.getElementById('playerDefense').textContent = this.player.defense;
-        document.getElementById('playerDexterity').textContent = this.player.dexterity;
-        document.getElementById('playerGold').textContent = this.player.gold;
-        
-        // Update floor display
-        document.getElementById('currentFloor').textContent = this.floor;
-        
-        // Update health bar
-        const healthPercent = (this.player.hp / this.player.maxHp) * 100;
-        document.getElementById('healthBar').style.width = healthPercent + '%';
-        
-        // Update mana bar
-        const manaPercent = (this.player.mp / this.player.maxMp) * 100;
-        document.getElementById('manaBar').style.width = manaPercent + '%';
+        // Messages
+        const messageLog = document.getElementById('messages');
+        if (messageLog) {
+            messageLog.innerHTML = '';
+            this.messages.slice(-10).forEach(msg => {
+                const msgElement = document.createElement('div');
+                msgElement.textContent = msg.text;
+                msgElement.classList.add('message', `message-${msg.type}`);
+                messageLog.appendChild(msgElement);
+            });
+            messageLog.scrollTop = messageLog.scrollHeight;
+        }
     }
      render() {
         this.calculateFOV(); // Calculate FOV before rendering
@@ -2454,6 +2464,49 @@ export class Game {
 
         // Render player (always visible)
         this.renderEntity(this.player.x - cameraX, this.player.y - cameraY, this.player.symbol, this.player.color);
+
+        this.drawPlayerStats();
+    }
+
+    drawPlayerStats() {
+        if (!this.player) return; // Player might not be created yet
+
+        const y = this.canvas.height - 8; // Position from the bottom
+        const x = 10;
+        const fontSize = 14;
+        this.ctx.font = `${fontSize}px 'Courier New', monospace`;
+        this.ctx.fillStyle = this.colors.text;
+        this.ctx.textAlign = 'left';
+
+        const p = this.player;
+        const level = `Level: ${p.level}`;
+        const hp = `HP: ${p.hp}(${p.maxHp})`; // "Hits" -> "HP"
+        const mp = `MP: ${p.mp}(${p.maxMp})`; // MPを追加
+        const str = `Str: ${p.attack}`;
+        const gold = `Gold: ${p.gold}`;
+        const armor = `Armor: ${p.defense}`;
+        const exp = `Exp: ${p.experience}`;
+        const floor = `Floor: ${this.floor}`;
+
+        const stats = [
+            level,
+            hp,
+            mp, // MPを追加
+            str,
+            gold,
+            armor,
+            exp,
+            floor
+        ];
+        
+        const statString = stats.join('   ');
+
+        // Clear the bottom area before drawing
+        this.ctx.fillStyle = this.colors.background;
+        this.ctx.fillRect(0, this.canvas.height - (fontSize + 4), this.canvas.width, fontSize + 4);
+
+        this.ctx.fillStyle = this.colors.text;
+        this.ctx.fillText(statString, x, y);
     }
 
     updateProjectiles() {

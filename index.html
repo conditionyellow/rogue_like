@@ -42,13 +42,13 @@
 
         #main-container {
             display: flex;
-            /* gap: 15px; */
+            gap: 15px;
             width: 100%;
-            max-width: 1200px; /* 280px (left) + 640px (center) + 280px (right) + 15px*2 (gap) = 1230px */
+            max-width: 1200px;
             justify-content: center;
         }
 
-        #left-panel, #right-panel {
+        #right-panel {
             display: flex;
             flex-direction: column;
             gap: 15px;
@@ -78,7 +78,6 @@
             align-items: center;
             height: 100%;
             flex: 1;
-            margin-left: 15px;
             margin-right: 15px;
         }
 
@@ -86,16 +85,14 @@
             border: 2px solid var(--border-color);
             background-color: #000;
             image-rendering: pixelated;
-            width: 640px;
-            /* height: 640px; */
+            width: 100%;
+            height: 100%;
             flex-shrink: 0;
             flex: 1;
         }
 
-        #stats-panel { flex: 1; }
         #messages-panel { flex: 1; }
         #inventory-panel { flex: 1 1 auto; min-height: 0; }
-        #controls-panel { flex: 1; }
 
         .stat-bar {
             margin: 8px 0;
@@ -181,41 +178,6 @@
     <h1 data-i18n-key="game_title">🗡️ Rogue - The Dungeon Crawler</h1>
     
     <div id="main-container">
-        
-        <div id="left-panel">
-            <div id="stats-panel" class="panel">
-                <h3 data-i18n-key="ui_stats_title">Player Stats</h3>
-                <div>Level: <span id="playerLevel">1</span> | Floor: <span id="currentFloor">1</span></div>
-                <div>HP: <span id="playerHP">100</span>/<span id="playerMaxHP">100</span></div>
-                <div class="stat-bar">
-                    <div class="health-bar" id="healthBar" style="width: 100%"></div>
-                </div>
-                <div>MP: <span id="playerMP">50</span>/<span id="playerMaxMP">50</span></div>
-                <div class="stat-bar">
-                    <div class="mana-bar" id="manaBar" style="width: 100%"></div>
-                </div>
-                <div>Attack: <span id="playerAttack">10</span></div>
-                <div>Defense: <span id="playerDefense">5</span></div>
-                <div>Dexterity: <span id="playerDexterity">10</span></div>
-                <div>Gold: <span id="playerGold">0</span></div>
-            </div>
-            <div id="controls-panel" class="panel">
-                <h3 data-i18n-key="ui_controls_title">Controls</h3>
-                <div class="controls-list">
-                    WASD/Arrows: Move<br>
-                    Space: Rest (HP/MP recovery)<br>
-                    G: Pick up item<br>
-                    I: Inventory UI<br>
-                    U: Use item (select)<br>
-                    M: Cast Magic<br>
-                    B: Interact with Merchant<br>
-                    1-9: Item/Spell (direct)<br>
-                    E: Equip<br>
-                    R: Unequip<br>
-                    ESC: Cancel/Close UI
-                </div>
-            </div>
-        </div>
 
         <div id="center-panel">
             <canvas id="gameCanvas" width="640" height="640"></canvas>
