@@ -39,7 +39,6 @@ class AudioManager {
             this.generateBackgroundMusic();
             
             this.initialized = true;
-            console.log('Audio system initialized successfully');
         } catch (error) {
             console.warn('Audio initialization failed:', error);
         }
@@ -56,17 +55,6 @@ class AudioManager {
         if (this.masterGain && !this.isMuted) {
             this.masterGain.gain.setValueAtTime(this.masterVolume, this.audioContext.currentTime);
         }
-    }
-    
-    toggleMute() {
-        this.isMuted = !this.isMuted;
-        if (this.masterGain) {
-            this.masterGain.gain.setValueAtTime(
-                this.isMuted ? 0 : this.masterVolume, 
-                this.audioContext.currentTime
-            );
-        }
-        return this.isMuted;
     }
     
     createProceduralSounds() {
@@ -123,7 +111,6 @@ class AudioManager {
                 this.createOscillator(params.frequency, params.type, now, params.duration, gainNode);
             }
         } catch (error) {
-            console.warn('Error playing procedural sound:', error);
         }
     }
     
@@ -219,7 +206,6 @@ class AudioManager {
             this.backgroundMusic.isPlaying = true;
             
         } catch (error) {
-            console.warn('Error starting background music:', error);
         }
     }
     
@@ -243,7 +229,6 @@ class AudioManager {
             }, 600);
             
         } catch (error) {
-            console.warn('Error stopping background music:', error);
         }
     }
     
@@ -255,27 +240,21 @@ class AudioManager {
         if (this.soundEffects[soundName]) {
             this.soundEffects[soundName].play();
         } else {
-            console.warn(`Sound effect '${soundName}' not found`);
         }
     }
-    
-    setMasterVolume(volume) {
-        this.masterVolume = Math.max(0, Math.min(1, volume));
-        if (this.masterGain) {
-            this.masterGain.gain.setValueAtTime(this.masterVolume, this.audioContext.currentTime);
-        }
-    }
-    
-    setEffectsVolume(volume) {
-        this.effectsVolume = Math.max(0, Math.min(1, volume));
-    }
-    
-    setMusicVolume(volume) {
-        this.musicVolume = Math.max(0, Math.min(1, volume));
-    }
-    
+
     toggleMute() {
         this.isMuted = !this.isMuted;
+
+        // Mute/unmute master gain
+        if (this.masterGain) {
+            this.masterGain.gain.setValueAtTime(
+                this.isMuted ? 0 : this.masterVolume, 
+                this.audioContext.currentTime
+            );
+        }
+
+        // Stop/start background music
         if (this.isMuted) {
             this.stopBackgroundMusic();
         } else if (this.initialized) {

@@ -211,14 +211,14 @@ export class Game {
                 case 'i':
                     this.enterInventoryMode();
                     break;
-                case 'u': // Kept for compatibility, but 'i' is the new main way
-                    this.enterInventoryMode();
-                    break;
                 case 'm':
                     this.startMagicSelection();
                     break;
                 case 'b':
                     this.interactWithMerchant();
+                    break;
+                case 'e':
+                    this.showEquipment();
                     break;
                 case '?':
                     this.showHelp();
@@ -341,9 +341,9 @@ export class Game {
     showHelp() {
         this.addMessage(loc.t('help_title'), 'system');
         const helpKeys = [
-            'help_move', 'help_rest', 'help_get', 'help_inventory', 'help_use',
-            'help_magic', 'help_merchant', 'help_direct_select', 'help_equip',
-            'help_unequip', 'help_cancel', 'help_show'
+            'help_move', 'help_rest', 'help_get', 'help_inventory',
+            'help_magic', 'help_merchant', 'help_equip', 'help_direct_select',
+            'help_cancel', 'help_show'
         ];
         helpKeys.forEach(key => this.addMessage(loc.t(key), 'system'));
     }
@@ -809,9 +809,7 @@ export class Game {
             } else {
                 this.audioManager.playSound('enemyDeath');
                 this.addMessage(loc.t('msg_enemy_dies', { defender_name: defender.name }), 'combat');
-                console.log(`DEBUG: Before exp gain - Player exp: ${this.player.experience}, Monster exp: ${defender.experience}`);
-                this.player.experience += defender.experience;
-                console.log(`DEBUG: After exp gain - Player exp: ${this.player.experience}, Needed: ${this.player.experienceToNext}`);
+                
                 this.player.gold += defender.gold;
                 this.checkLevelUp();
             }
@@ -1567,34 +1565,25 @@ export class Game {
         }
     }
     
-    // 安全なアイテム削除メソッド
     removeItemFromInventory(itemId) {
         const originalLength = this.player.inventory.length;
         const itemToRemove = this.player.inventory.find(item => item.id === itemId);
         
         if (!itemToRemove) {
-            console.warn(`Warning: Item with ID ${itemId} not found in inventory`);
-            console.log('Current inventory:', this.player.inventory.map(item => `${item.name}(ID:${item.id})`));
             return false;
         }
         
-        console.log(`Attempting to remove ${itemToRemove.name} (ID: ${itemId}) from inventory`);
         this.player.inventory = this.player.inventory.filter(item => item.id !== itemId);
         
         // デバッグ: 削除が正常に行われたかチェック
         if (this.player.inventory.length === originalLength) {
-            console.warn(`Warning: Failed to remove item ${itemToRemove.name} (ID: ${itemId}) from inventory`);
-            console.log('Inventory after failed removal:', this.player.inventory.map(item => `${item.name}(ID:${item.id})`));
             return false;
         }
         
-        console.log(`Successfully removed ${itemToRemove.name} (ID: ${itemId}) from inventory`);
-        console.log('Inventory after removal:', this.player.inventory.map(item => `${item.name}(ID:${item.id})`));
         return true;
     }
     
     checkLevelUp() {
-        console.log(`DEBUG: checkLevelUp called - Current exp: ${this.player.experience}, Needed: ${this.player.experienceToNext}`);
         if (this.player.experience >= this.player.experienceToNext) {
             this.player.level++;
             this.player.experience -= this.player.experienceToNext;
@@ -1660,30 +1649,6 @@ export class Game {
         setTimeout(() => {
             this.showGameOverScreen(killer);
         }, 1000); // 1秒後に表示
-    }
-    
-    toggleInventory() {
-        // Simple inventory display in messages (旧来のメソッド - 後方互換性のために残す)
-        this.addMessage(loc.t('msg_inventory_title'), 'system');
-        if (this.player.inventory.length === 0) {
-            this.addMessage(loc.t('msg_inventory_empty_ui'), 'system');
-        } else {
-            this.player.inventory.forEach((item, index) => {
-                const keyNumber = index + 1;
-                let description = `${keyNumber}: ${item.symbol} ${item.name}`;
-                
-                if (item.type === 'potion') {
-                    description += ` (${item.effect === 'heal' ? 'HP' : 'MP'} +${item.value})`;
-                } else if (item.type === 'weapon') {
-                    description += ` (Attack +${item.attack})`;
-                } else if (item.type === 'armor') {
-                    description += ` (Defense +${item.defense})`;
-                }
-                
-                this.addMessage(description, 'item');
-            });
-            this.addMessage(loc.t('msg_inventory_direct_use_prompt'), 'system');
-        }
     }
     
     // Simple inventory display in messages (旧来のメソッド - 後方互換性のために残す)
@@ -1989,43 +1954,6 @@ export class Game {
         }
     }
     
-    showEquipment() {
-        this.addMessage(loc.t('msg_equipment_title'), 'system');
-        if (this.player.equipment.weapon) {
-            this.addMessage(loc.t('msg_weapon_equipped', { weapon_name: this.player.equipment.weapon.name, attack_bonus: this.player.equipment.weapon.attack }), 'item'); // Need to add this key
-        } else {
-            this.addMessage(loc.t('msg_weapon_none'), 'system');
-        }
-        
-        if (this.player.equipment.armor) {
-            this.addMessage(loc.t('msg_armor_equipped', { armor_name: this.player.equipment.armor.name, defense_bonus: this.player.equipment.armor.defense }), 'item'); // Need to add this key
-        } else {
-            this.addMessage(loc.t('msg_armor_none'), 'system');
-        }
-
-        if (this.player.equipment.shield) { // Add shield equipped display
-            this.addMessage(loc.t('msg_shield_equipped', { shield_name: this.player.equipment.shield.name, defense_bonus: this.player.equipment.shield.defense }), 'item'); // Need to add this key
-        } else {
-            this.addMessage(loc.t('msg_shield_none'), 'system');
-        }
-    }
-    
-    removeEquipment() {
-        // 武器から優先的に外す
-        if (this.player.equipment.weapon) {
-            this.unequipItem('weapon');
-            this.processTurn();
-        } else if (this.player.equipment.armor) {
-            this.unequipItem('armor');
-            this.processTurn();
-        } else if (this.player.equipment.shield) { // Add shield unequip priority
-            this.unequipItem('shield');
-            this.processTurn();
-        } else {
-            this.addMessage(loc.t('msg_no_equipment_to_remove'), 'system');
-        }
-    }
-    
     updatePlayerStats() {
         // 基本ステータスから開始
         this.player.attack = this.player.baseAttack;
@@ -2041,6 +1969,27 @@ export class Game {
         }
         if (this.player.equipment.shield) { // Add shield defense
             this.player.defense += this.player.equipment.shield.defense || 0;
+        }
+    }
+    
+    showEquipment() {
+        this.addMessage(loc.t('msg_equipment_title'), 'system');
+        if (this.player.equipment.weapon) {
+            this.addMessage(loc.t('msg_weapon_equipped', { weapon_name: this.player.equipment.weapon.name, attack_bonus: this.player.equipment.weapon.attack }), 'item');
+        } else {
+            this.addMessage(loc.t('msg_weapon_none'), 'system');
+        }
+        
+        if (this.player.equipment.armor) {
+            this.addMessage(loc.t('msg_armor_equipped', { armor_name: this.player.equipment.armor.name, defense_bonus: this.player.equipment.armor.defense }), 'item');
+        } else {
+            this.addMessage(loc.t('msg_armor_none'), 'system');
+        }
+
+        if (this.player.equipment.shield) {
+            this.addMessage(loc.t('msg_shield_equipped', { shield_name: this.player.equipment.shield.name, defense_bonus: this.player.equipment.shield.defense }), 'item');
+        } else {
+            this.addMessage(loc.t('msg_shield_none'), 'system');
         }
     }
     

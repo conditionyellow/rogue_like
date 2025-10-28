@@ -203,7 +203,6 @@
         document.addEventListener('DOMContentLoaded', async () => {
             await loc.init(); // 翻訳の初期読み込みを待つ
             const game = new Game();
-            loc.setGame(game); // locにgameインスタンスを渡す
             await game.init(); // gameの初期化を待つ
         });
     </script>
